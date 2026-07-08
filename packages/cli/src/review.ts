@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { repoRoot, tryExec } from './git.js'
 import { prep } from './prep.js'
 import { show } from './show.js'
+import { printBanner, startSpinner } from './ui.js'
 
 const REVIEW_INSTRUCTIONS = `You are a senior code reviewer. Review the merge request provided in the <input> block below (JSON: branch, target, commits, files, and the full unified diff). Do NOT use any tools; base your review ONLY on the provided input. Then output the review as a single JSON object and NOTHING else (no prose, no code fences).
 
@@ -109,6 +110,7 @@ export async function review(opts: {
   open: boolean
   cwd: string
 }): Promise<void> {
+  printBanner()
   prep({ target: opts.target, cwd: opts.cwd })
 
   const cwd = repoRoot(opts.cwd)
@@ -117,7 +119,8 @@ export async function review(opts: {
 
   const agentCommand = opts.agent ?? detectAgent(cwd)
   console.log('')
-  console.log(`reviewing with: ${agentCommand}  (this can take a few minutes…)`)
+  const shortCmd = agentCommand.length > 40 ? `${agentCommand.slice(0, 37)}…` : agentCommand
+  const spinner = startSpinner(`reviewing with ${shortCmd}`)
 
   const prompt = `${REVIEW_INSTRUCTIONS}\n\n<input>\n${input}\n</input>\n\nOutput ONLY the JSON object now.`
 
@@ -125,6 +128,7 @@ export async function review(opts: {
   try {
     out = await runAgent(agentCommand, prompt, cwd)
   } catch (err) {
+    spinner.stop('  ✘ agent run failed')
     throw new Error(`agent run failed: ${err instanceof Error ? err.message : String(err)}`)
   }
 
@@ -133,11 +137,12 @@ export async function review(opts: {
   try {
     json = extractReviewJson(out)
   } catch (err) {
+    spinner.stop('  ✘ unusable agent output')
     writeFileSync(join(dir, 'agent-output.txt'), out)
     throw err
   }
   writeFileSync(join(dir, 'review.json'), json)
-  console.log('review received.')
+  spinner.stop('  ✔ review received')
 
   await show({ port: opts.port, open: opts.open, cwd })
 }
