@@ -1,0 +1,79 @@
+/* Thème sombre "Nuit" — tokens portés du design Nolyra (préfixe conservé pour
+   garder les composants identiques à la source ; renommage trivial au rebranding). */
+:root {
+  --nolyra-bg: #08090f;
+  --nolyra-panel: #141926;
+  --nolyra-ink: #e8ecf4;
+  --nolyra-ink-2: #c7cedd;
+  --nolyra-ink-3: #9aa3b8;
+  --nolyra-line: #222a3d;
+  --nolyra-line-2: #1a2130;
+  --nolyra-accent: #ff7a2e;
+  --nolyra-accent-soft: #1d1520;
+  --nolyra-amber: #ffc24d;
+  --nolyra-amber-soft: #1c1a12;
+
+  --nolyra-risk-high: #e8452b;
+  --nolyra-risk-high-soft: #1d1520;
+  --nolyra-risk-med: #ffc24d;
+  --nolyra-risk-med-soft: #1c1a12;
+  --nolyra-risk-low: #4cc7a3;
+  --nolyra-risk-low-soft: #12241d;
+
+  --nolyra-kind-security: #f07a63;
+  --nolyra-kind-security-soft: #1d1520;
+  --nolyra-kind-perf: #ffc24d;
+  --nolyra-kind-perf-soft: #1c1a12;
+  --nolyra-kind-convention: #7fa8f0;
+  --nolyra-kind-convention-soft: #18202e;
+  --nolyra-kind-design: #b89ae8;
+  --nolyra-kind-design-soft: rgba(138, 111, 214, 0.2);
+  --nolyra-kind-praise: #4cc7a3;
+  --nolyra-kind-praise-soft: #12241d;
+  --nolyra-kind-why: #ff9d4d;
+  --nolyra-kind-why-soft: #2a1a12;
+
+  --nolyra-diff-add: #12241d;
+  --nolyra-diff-add-gut: #163a2a;
+  --nolyra-diff-del: #2a1214;
+  --nolyra-diff-del-gut: #3a1a1a;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--nolyra-bg);
+  color: var(--nolyra-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.nolyra-muted {
+  color: var(--nolyra-ink-3);
+}
+
+/* Scrollbars fines sombres */
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--nolyra-line);
+  border-radius: 99px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--nolyra-ink-3);
+}

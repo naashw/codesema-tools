@@ -1,0 +1,53 @@
+// Types du record servi par `mr-review show` (/api/review).
+// Miroir du contrat CLI (packages/cli/src/contract.ts).
+
+import type { Finding } from './composables/useDiff'
+
+export type NarrativeChapter = {
+  title: string
+  rationale: string
+  files: string[]
+  finding_refs: number[]
+  risk?: 'high' | 'medium' | 'low'
+  take?: string
+  check?: string | null
+}
+
+export type ReviewFirstItem = {
+  point: string
+  risk: 'high' | 'medium' | 'low'
+  chapter_ref: number | null
+  file: string | null
+}
+
+export type ReviewNarrative = {
+  intent: string
+  confidence: 'high' | 'medium' | 'low'
+  prologue?: {
+    why: string
+    what: string
+    key_changes: { title: string; detail: string }[]
+  }
+  chapters: NarrativeChapter[]
+  review_first: ReviewFirstItem[]
+}
+
+export type ReviewRecord = {
+  version: 1
+  meta: {
+    title: string
+    branch: string
+    target: string
+    merge_base: string
+    repo_root: string
+    created_at: string
+  }
+  commits: string[]
+  diff: string
+  review: {
+    verdict: 'approve' | 'request_changes' | 'comment'
+    summary: string
+    findings: Finding[]
+    narrative: ReviewNarrative | null
+  }
+}
