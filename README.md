@@ -25,7 +25,13 @@ npx skills add <org>/mr-review
 
 Then, in any repo, on your feature branch, ask your agent: `/mr-review`.
 
-You can also use the CLI directly:
+Or run everything in one shot from your feature branch (uses your local `claude` CLI headlessly; pass `--agent '<cmd>'` for another agent):
+
+```bash
+npx -y mr-review review
+```
+
+The two underlying steps are also available separately (this is what the skill flow uses):
 
 ```bash
 npx -y mr-review prep
