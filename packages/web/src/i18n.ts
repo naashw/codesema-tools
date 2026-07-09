@@ -10,6 +10,8 @@ const messages: Record<string, string> = {
   'verdict.approve': 'Approved',
   'verdict.request_changes': 'Changes requested',
   'verdict.comment': 'Comment',
+  'header.copyPrompt': 'Copy for Claude Code ({n})',
+  'header.copied': 'Copied ✓',
 
   // Prologue
   'reviews.prologue.why': 'Why this MR',

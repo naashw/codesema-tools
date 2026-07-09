@@ -2,9 +2,10 @@
 // ReviewShell — page unique de review : header, onglets Chapitres / Fichiers,
 // vue d'ensemble (prologue + liste des chapitres), mode guidé, explorateur de fichiers.
 
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import type { Finding } from '../composables/useDiff'
 import { parseDiff } from '../composables/useDiff'
+import { buildFixPrompt, isActionable } from '../composables/useFixPrompt'
 import { useReviewProgress } from '../composables/useReviewProgress'
 import type { NarrativeChapter, ReviewRecord } from '../types'
 import ReviewPrologue from './ReviewPrologue.vue'
@@ -52,6 +53,28 @@ const VERDICT_META: Record<string, { labelKey: string; cls: string }> = {
 }
 
 const verdictMeta = computed(() => VERDICT_META[props.record.review.verdict] ?? VERDICT_META.comment!)
+
+// ── Copie du prompt de fix (clipboard) ─────────────────────────
+
+const actionableCount = computed(() => findings.value.filter(isActionable).length)
+
+const copied = ref(false)
+let copiedTimer: ReturnType<typeof setTimeout> | undefined
+
+async function copyFixPrompt() {
+  try {
+    await navigator.clipboard.writeText(buildFixPrompt(props.record))
+    copied.value = true
+    if (copiedTimer) clearTimeout(copiedTimer)
+    copiedTimer = setTimeout(() => {
+      copied.value = false
+    }, 2000)
+  } catch {
+    // clipboard indisponible : pas de feedback
+  }
+}
+
+onUnmounted(() => clearTimeout(copiedTimer))
 
 // ── Progression lu / checks (localStorage, clé par review) ─────
 
@@ -162,6 +185,14 @@ const SEV_CLS: Record<string, string> = {
           <code>{{ meta.target }}</code>
         </div>
       </div>
+      <button
+        v-if="actionableCount > 0"
+        class="sr-copy-btn"
+        :class="{ 'sr-copy-btn--done': copied }"
+        @click="copyFixPrompt"
+      >
+        {{ copied ? $t('header.copied') : $t('header.copyPrompt', { n: actionableCount }) }}
+      </button>
       <span class="sr-verdict" :class="verdictMeta!.cls">{{ $t(verdictMeta!.labelKey) }}</span>
     </header>
 
@@ -392,6 +423,30 @@ const SEV_CLS: Record<string, string> = {
 .sr-verdict--comment {
   color: var(--nolyra-amber);
   background: var(--nolyra-amber-soft);
+}
+
+.sr-copy-btn {
+  flex-shrink: 0;
+  margin-top: 4px;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--nolyra-line);
+  background: var(--nolyra-panel);
+  color: var(--nolyra-ink-2);
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+
+.sr-copy-btn:hover {
+  border-color: var(--nolyra-ink-3);
+}
+
+.sr-copy-btn--done {
+  color: var(--nolyra-risk-low);
+  border-color: var(--nolyra-risk-low);
 }
 
 /* ── Onglets ────────────────────────────────────────────────── */
