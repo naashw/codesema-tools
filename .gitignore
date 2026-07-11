@@ -4,7 +4,8 @@ web-dist/
 .codesema/
 *.log
 .DS_Store
+CLAUDE.md
 
-# copies prepack (source = racine)
+# prepack copies (source = repo root)
 packages/cli/LICENSE
 packages/cli/README.md
