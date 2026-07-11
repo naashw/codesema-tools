@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, shallowRef } from 'vue'
 import type { LiveStatus, PartialReview, ReviewRecord } from './types'
 import ReviewLive from './components/ReviewLive.vue'
 import ReviewShell from './components/ReviewShell.vue'
 
-const record = ref<ReviewRecord | null>(null)
+// shallowRef: the record is written once then never mutated; deep reactivity over
+// its diff + findings would only add proxy overhead on every read during render.
+const record = shallowRef<ReviewRecord | null>(null)
 const status = ref<LiveStatus | null>(null)
 const partial = ref<PartialReview | null>(null)
 const error = ref<string | null>(null)
@@ -39,7 +41,7 @@ function openEvents() {
       error.value = e instanceof Error ? e.message : String(e)
     }
   })
-  // serveur arrêté (Ctrl+C) : on garde le dernier état affiché, EventSource retente seul
+  // Server stopped (Ctrl+C): keep the last state shown, EventSource retries on its own.
 }
 
 async function load() {

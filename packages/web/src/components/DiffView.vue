@@ -1,24 +1,20 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { DiffFile, Finding, HunkBlock, HunkLine, SplitRow } from '../composables/useDiff'
-import { toSplit } from '../composables/useDiff'
+import type { DiffFile, Finding, FindingSeverity, HunkBlock, HunkLine, SplitRow } from '../composables/useDiff'
+import { collapsedByBudget, toSplit } from '../composables/useDiff'
 import { t } from '../i18n'
 
 const props = defineProps<{
-  /** Fichiers déjà parsés (parseDiff/pickFiles chez l'appelant : un seul parse par vue). */
   files: DiffFile[]
-  /** Mode split/unifié piloté depuis l'extérieur (toolbar onglet Fichiers).
-   *  Si absent, DiffView gère son propre état localStorage. */
   mode?: 'split' | 'unified'
-  /** Si vrai, masque la toolbar interne split/unifié (toolbar externe fournie). */
   hideToolbar?: boolean
-  /** Clé de remount — quand elle change, les fichiers reprennent leur état par défaut (déplié). */
   collapseKey?: number
+  /** Forces the initial collapse of these files. The caller decides on a cumulative
+   *  budget when each DiffView gets a single file and can't see the page-wide total. */
+  initialCollapsed?: boolean
 }>()
 
 const isClient = typeof window !== 'undefined'
-
-// ── Toggle split / unifié (préférence globale, persistée localStorage) ───────
 
 const SPLIT_KEY = 'codesema-diff-mode'
 
@@ -36,17 +32,17 @@ function setMode(m: 'split' | 'unified') {
   if (isClient) localStorage.setItem(SPLIT_KEY, m)
 }
 
-// ── Repliage des fichiers ──────────────────────────────────────────────────
+// Large files (or files past the page's cumulative budget) start collapsed: their
+// DOM (v-if) is only created on expand, keeping the first render smooth on huge diffs.
+function initialCollapsedSet(): Set<string> {
+  const collapsed = collapsedByBudget(props.files)
+  if (props.initialCollapsed) for (const f of props.files) collapsed.add(f.path)
+  return collapsed
+}
 
-// Les très gros fichiers démarrent repliés : leur DOM (v-if) n'est créé qu'au
-// dépliage, ce qui garde le premier rendu fluide sur les diffs énormes.
-const BIG_FILE_LINES = 500
+const collapsed = ref<Set<string>>(initialCollapsedSet())
 
-const collapsed = ref<Set<string>>(
-  new Set(props.files.filter((f) => f.addCount + f.delCount > BIG_FILE_LINES).map((f) => f.path)),
-)
-
-// Quand collapseKey change : force l'état replié (pair = déplié, impair = replié)
+// When collapseKey changes: force the collapsed state (even = expanded, odd = collapsed)
 watch(
   () => props.collapseKey,
   (k) => {
@@ -66,13 +62,9 @@ function isCollapsed(path: string): boolean {
   return collapsed.value.has(path)
 }
 
-// ── Compteur de findings par fichier ──────────────────────────────────────
-
 function fileFindingCount(file: { topFindings: Finding[]; byLine: Record<number, Finding[]> }): number {
   return file.topFindings.length + Object.values(file.byLine).reduce((n, arr) => n + arr.length, 0)
 }
-
-// ── NL_KIND : map kind → libellé + couleurs ───────────────────────────────
 
 type KindMeta = { label: string; color: string; bg: string }
 
@@ -85,7 +77,7 @@ const NL_KIND: Partial<Record<string, KindMeta>> = {
   why:        { label: t('diffView.kindWhy'),         color: 'var(--nolyra-kind-why)',         bg: 'var(--nolyra-kind-why-soft)' },
 }
 
-const SEV_KIND: Partial<Record<string, KindMeta>> = {
+const SEV_KIND: Record<FindingSeverity, KindMeta> = {
   critical: { label: t('diffView.sevCritical'), color: 'var(--nolyra-risk-high)',     bg: 'var(--nolyra-risk-high-soft)' },
   major:    { label: t('diffView.sevMajor'),    color: 'var(--nolyra-risk-high)',     bg: 'var(--nolyra-risk-high-soft)' },
   minor:    { label: t('diffView.sevMinor'),    color: 'var(--nolyra-risk-med)',      bg: 'var(--nolyra-risk-med-soft)' },
@@ -102,13 +94,9 @@ function resolveKind(f: Finding): KindMeta {
   return SEV_KIND[f.severity] ?? FALLBACK_KIND
 }
 
-// ── Bordure gauche de note selon kind/severity ────────────────────────────
-
 function noteBorderColor(f: Finding): string {
   return resolveKind(f).color
 }
-
-// ── Rendu inline du texte : `code` → <code> ───────────────────────────────
 
 function richParts(s: string): { text: string; isCode: boolean }[] {
   return s.split(/(`[^`]+`)/g).map((p) => ({
@@ -116,8 +104,6 @@ function richParts(s: string): { text: string; isCode: boolean }[] {
     isCode: p.startsWith('`') && p.endsWith('`'),
   }))
 }
-
-// ── Split view helpers ────────────────────────────────────────────────────
 
 function splitRows(rows: HunkLine[]): SplitRow[] {
   return toSplit(rows)
@@ -155,7 +141,6 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
 <template>
   <p v-if="!files.length" class="nolyra-muted text-sm">{{ $t('reviews.noDiff') }}</p>
   <div v-else class="diff-view-root">
-    <!-- Toggle split/unifié (masqué si toolbar externe fournie) -->
     <div v-if="!hideToolbar" class="diff-toolbar">
       <div class="diff-seg">
         <button :class="{ on: diffMode === 'unified' }" @click="setMode('unified')">
@@ -167,14 +152,12 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
       </div>
     </div>
 
-    <!-- Liste des fichiers -->
     <div class="diff-files">
       <div
         v-for="file in files"
         :key="file.path"
         class="srd-file"
       >
-        <!-- Header repliable -->
         <div class="srd-file-head" :data-diff-file="file.path" @click="toggleFile(file.path)">
           <span class="srd-chev" :class="{ open: !isCollapsed(file.path) }">▸</span>
           <code class="srd-path diff-file-path">{{ file.path }}</code>
@@ -189,9 +172,7 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
           </span>
         </div>
 
-        <!-- Corps -->
         <div v-if="!isCollapsed(file.path)" class="srd-body">
-          <!-- Notes hors-ligne (topFindings) -->
           <template v-if="file.topFindings.length">
             <div
               v-for="(f, i) in file.topFindings"
@@ -228,15 +209,12 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
             </div>
           </template>
 
-          <!-- Hunks avec gaps -->
           <template v-for="(block, bi) in file.hunks" :key="bi">
-            <!-- Gap bar -->
             <div v-if="isGap(block)" class="srd-gap">
               <span class="srd-gap-ic">↕</span>
               {{ $t('diffView.gapLines', { n: gapSize(block) }, gapSize(block)) }}
             </div>
 
-            <!-- Hunk unifié -->
             <template v-else-if="isHunkRows(block) && diffMode === 'unified'">
               <div class="srd-unified">
                 <template v-for="(row, ri) in hunkRows(block)" :key="ri">
@@ -249,7 +227,6 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
                     <span class="srd-sign">{{ row.t === 'add' ? '+' : row.t === 'del' ? '−' : ' ' }}</span>
                     <span class="srd-code">{{ row.c || ' ' }}</span>
                   </div>
-                  <!-- Note inline après la ligne dans le mode unifié -->
                   <div
                     v-if="row.note"
                     class="nlr-note nlr-note-inline"
@@ -281,7 +258,6 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
                       </div>
                       <pre class="nlr-sugg-code"><code>{{ row.note.suggestion }}</code></pre>
                     </div>
-                    <!-- Notes supplémentaires sur la même ligne (byLine[n][1..]) -->
                     <template v-if="extraNotes(file.byLine, row.n).length">
                       <template
                         v-for="(extraNote, en) in extraNotes(file.byLine, row.n)"
@@ -321,11 +297,9 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
               </div>
             </template>
 
-            <!-- Hunk split -->
             <template v-else-if="isHunkRows(block) && diffMode === 'split'">
               <div class="srd-split">
                 <template v-for="(srow, si) in splitRows(hunkRows(block))" :key="si">
-                  <!-- Note émise après le bloc apparié (mode split) -->
                   <div v-if="srow.kind === 'note'" class="srd-split-note-row">
                     <div
                       class="nlr-note nlr-note-split"
@@ -360,9 +334,7 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
                     </div>
                   </div>
 
-                  <!-- Ligne split (ctx ou chg) -->
                   <div v-else class="srd-row">
-                    <!-- Cellule gauche -->
                     <div
                       class="srd-cell"
                       :class="srow.kind === 'ctx'
@@ -373,7 +345,6 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
                       <span class="srd-sign">{{ srow.kind !== 'ctx' && srow.left ? '−' : ' ' }}</span>
                       <span class="srd-code">{{ srow.kind === 'ctx' ? (srow.left.c || ' ') : (srow.left?.c ?? ' ') }}</span>
                     </div>
-                    <!-- Cellule droite -->
                     <div
                       class="srd-cell"
                       :class="srow.kind === 'ctx'
@@ -396,14 +367,14 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
 </template>
 
 <style scoped>
-/* ── Root ────────────────────────────────────────────────────────────────── */
+/* root */
 .diff-view-root {
   display: flex;
   flex-direction: column;
   gap: 0;
 }
 
-/* ── Toolbar toggle split/unifié ─────────────────────────────────────────── */
+/* toolbar */
 .diff-toolbar {
   display: flex;
   align-items: center;
@@ -438,20 +409,20 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
   color: var(--nolyra-bg);
 }
 
-/* ── Liste de fichiers ───────────────────────────────────────────────────── */
+/* file list */
 .diff-files {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-/* ── Fichier ─────────────────────────────────────────────────────────────── */
+/* file */
 .srd-file {
   border: 1px solid var(--nolyra-line);
   border-radius: 10px;
   overflow: hidden;
   background: var(--nolyra-panel);
-  /* saute layout/paint des fichiers hors viewport sur les gros diffs */
+  /* skip layout/paint for off-screen files on large diffs */
   content-visibility: auto;
   contain-intrinsic-size: auto 320px;
 }
@@ -524,7 +495,7 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
   color: var(--nolyra-ink-3);
 }
 
-/* ── Corps du fichier ────────────────────────────────────────────────────── */
+/* file body */
 .srd-body {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -532,7 +503,7 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
   overflow-x: auto;
 }
 
-/* ── Gap bar ────────────────────────────────────────────────────────────── */
+/* gap bar */
 .srd-gap {
   background: var(--nolyra-line-2);
   color: var(--nolyra-ink-3);
@@ -549,7 +520,7 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
   opacity: 0.6;
 }
 
-/* ── Vue unifiée ─────────────────────────────────────────────────────────── */
+/* unified view */
 .srd-unified {
   display: flex;
   flex-direction: column;
@@ -592,7 +563,7 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
   color: color-mix(in srgb, var(--nolyra-risk-high) 70%, var(--nolyra-ink-2));
 }
 
-/* ── Vue split ───────────────────────────────────────────────────────────── */
+/* split view */
 .srd-split {
   display: flex;
   flex-direction: column;
@@ -604,7 +575,6 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
 }
 
 .srd-split-note-row {
-  /* La note s'étend sur toute la largeur en mode split */
 }
 
 .srd-cell {
@@ -651,7 +621,6 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
   color: color-mix(in srgb, var(--nolyra-risk-high) 70%, var(--nolyra-ink-2));
 }
 
-/* Cellule vide hachurée (pas d'équivalent del/add dans le bloc) */
 .srd-cell-nil {
   background: repeating-linear-gradient(
     45deg,
@@ -662,7 +631,7 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
   );
 }
 
-/* ── Numéros de ligne + signe ────────────────────────────────────────────── */
+/* line numbers + sign */
 .srd-no {
   width: 38px;
   flex-shrink: 0;
@@ -696,7 +665,7 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
   line-height: inherit;
 }
 
-/* ── Carte Note ──────────────────────────────────────────────────────────── */
+/* note card */
 .nlr-note {
   background: var(--nolyra-panel);
   border: 1px solid var(--nolyra-line);
@@ -791,7 +760,7 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
   margin: 10px 0;
 }
 
-/* ── Proposition de correctif ────────────────────────────────────────────── */
+/* suggested fix */
 .nlr-sugg {
   margin-top: 11px;
   border: 1px solid var(--nolyra-line);
@@ -830,7 +799,7 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
   font-size: inherit;
 }
 
-/* ── Densité mobile (≤ 640px) : gouttières et notes resserrées ── */
+/* mobile density (<= 640px) */
 @media (max-width: 640px) {
   .srd-body { font-size: 11.5px; }
   .srd-no { width: 30px; padding: 0 5px; }

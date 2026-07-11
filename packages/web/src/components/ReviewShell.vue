@@ -1,10 +1,7 @@
 <script setup lang="ts">
-// ReviewShell — page unique de review : header, onglets Chapitres / Fichiers,
-// vue d'ensemble (prologue + liste des chapitres), mode guidé, explorateur de fichiers.
-
 import { computed, onUnmounted, ref } from 'vue'
 import type { Finding } from '../composables/useDiff'
-import { parseDiff, sameFile } from '../composables/useDiff'
+import { collapsedByBudget, parseDiff, sameFile } from '../composables/useDiff'
 import { buildFixPrompt, isActionable } from '../composables/useFixPrompt'
 import { useReviewProgress } from '../composables/useReviewProgress'
 import type { ReviewRecord } from '../types'
@@ -20,12 +17,10 @@ const props = defineProps<{
 
 const isClient = typeof window !== 'undefined'
 
-// ── Données dérivées du record ─────────────────────────────────
-
 const meta = computed(() => props.record.meta)
 const findings = computed<Finding[]>(() => props.record.review.findings)
 const narrative = computed(() => props.record.review.narrative)
-// check: null (contrat) normalisé en undefined (attendu par les composants)
+// check: null (contract) normalized to undefined (expected by the child components)
 const chapters = computed(() =>
   (narrative.value?.chapters ?? []).map((ch) => ({ ...ch, check: ch.check ?? undefined })),
 )
@@ -54,8 +49,6 @@ const VERDICT_META: Record<string, { labelKey: string; cls: string }> = {
 
 const verdictMeta = computed(() => VERDICT_META[props.record.review.verdict] ?? VERDICT_META.comment!)
 
-// ── Copie du prompt de fix (clipboard) ─────────────────────────
-
 const actionableCount = computed(() => findings.value.filter(isActionable).length)
 
 const copied = ref(false)
@@ -70,18 +63,14 @@ async function copyFixPrompt() {
       copied.value = false
     }, 2000)
   } catch {
-    // clipboard indisponible : pas de feedback
+    // clipboard unavailable: no feedback
   }
 }
 
 onUnmounted(() => clearTimeout(copiedTimer))
 
-// ── Progression lu / checks (localStorage, clé par review) ─────
-
 const progressKey = `${props.record.meta.branch}:${props.record.meta.created_at}`
 const { readSet, checkedSet, toggleRead, toggleChecked } = useReviewProgress(progressKey)
-
-// ── Onglets + mode guidé ───────────────────────────────────────
 
 const activeTab = ref<'chapters' | 'files'>('chapters')
 
@@ -101,7 +90,6 @@ function onGuidedNavigate(index: number) {
   syncHash()
 }
 
-// Deep-linking : #files / #chapter-N (état initial + partage d'URL)
 function syncHash() {
   if (!isClient) return
   const hash = activeTab.value === 'files' ? '#files' : guidedIndex.value !== null ? `#chapter-${guidedIndex.value}` : ''
@@ -114,15 +102,11 @@ if (isClient) {
   else if (m && Number(m[1]) < chapters.value.length) guidedIndex.value = Number(m[1])
 }
 
-// ── Fichiers hors chapitres (vue d'ensemble sans chapitre) ─────
-
 const otherFiles = computed(() => {
   if (!hasChapters.value) return []
   const covered = chapters.value.flatMap((ch) => ch.files)
   return parsedDiff.value.files.filter((f) => !covered.some((c) => sameFile(c, f.path)))
 })
-
-// ── Onglet Fichiers : split/unifié + replier + scroll-to-file ──
 
 const FILES_SPLIT_KEY = 'codesema-diff-mode'
 
@@ -134,6 +118,10 @@ function setFilesDiffMode(m: 'split' | 'unified') {
   filesDiffMode.value = m
   if (isClient) localStorage.setItem(FILES_SPLIT_KEY, m)
 }
+
+// Each per-file DiffView sees a single file, so it can't judge the page-wide total.
+// Decide the initial collapse here from the cumulative line budget across all files.
+const filesCollapsedByDefault = computed(() => collapsedByBudget(parsedDiff.value.files))
 
 const filesCollapseKey = ref(0)
 const filesAllCollapsed = computed(() => filesCollapseKey.value % 2 === 1)
@@ -150,8 +138,6 @@ function onFilePick(path: string) {
   fileScrollRefs.get(path)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
-// ── Sévérités (remarques générales) ────────────────────────────
-
 const SEV_CLS: Record<string, string> = {
   critical: 'sr-sev--high',
   major: 'sr-sev--high',
@@ -163,7 +149,6 @@ const SEV_CLS: Record<string, string> = {
 <template>
   <div class="sr-root">
 
-    <!-- ── Header ─────────────────────────────────────────────── -->
     <header class="sr-header">
       <div class="sr-header-main">
         <h1 class="sr-title">{{ meta.title }}</h1>
@@ -184,7 +169,6 @@ const SEV_CLS: Record<string, string> = {
       <span class="sr-verdict" :class="verdictMeta!.cls">{{ $t(verdictMeta!.labelKey) }}</span>
     </header>
 
-    <!-- ── Onglets ────────────────────────────────────────────── -->
     <div class="sr-tabs" role="tablist">
       <button
         role="tab"
@@ -213,10 +197,8 @@ const SEV_CLS: Record<string, string> = {
       </span>
     </div>
 
-    <!-- ── Onglet Chapitres ───────────────────────────────────── -->
     <div v-show="activeTab === 'chapters'" class="sr-stage">
 
-      <!-- Mode guidé -->
       <ChapterReview
         v-if="isGuidedMode && hasChapters && record.diff"
         :chapters="chapters"
@@ -231,7 +213,6 @@ const SEV_CLS: Record<string, string> = {
         @navigate="onGuidedNavigate"
       />
 
-      <!-- Vue d'ensemble -->
       <template v-else>
         <div class="sr-cols">
           <div class="sr-col-left">
@@ -243,7 +224,6 @@ const SEV_CLS: Record<string, string> = {
               :summary="record.review.summary"
             />
 
-            <!-- Remarques générales (non rattachées à un fichier du diff) -->
             <div v-if="unmatched.length" class="sr-general">
               <div class="sr-general-tag">{{ $t('reviews.generalNotes') }}</div>
               <ul class="sr-general-list">
@@ -267,13 +247,11 @@ const SEV_CLS: Record<string, string> = {
           </div>
         </div>
 
-        <!-- Sans chapitres : diff annoté complet -->
         <div v-if="!hasChapters && record.diff" class="sr-flat-diff">
           <div class="sr-general-tag">{{ $t('reviews.annotatedDiff') }}</div>
           <DiffView :files="parsedDiff.files" />
         </div>
 
-        <!-- Fichiers non couverts par les chapitres -->
         <div v-if="hasChapters && otherFiles.length" class="sr-flat-diff">
           <div class="sr-general-tag">{{ $t('reviews.otherChanges') }}</div>
           <DiffView :files="otherFiles" />
@@ -282,7 +260,6 @@ const SEV_CLS: Record<string, string> = {
 
     </div>
 
-    <!-- ── Onglet Fichiers ────────────────────────────────────── -->
     <div v-show="activeTab === 'files'" class="sr-stage sr-files-stage">
       <div v-if="record.diff" class="sr-files-layout">
         <FileTree
@@ -321,6 +298,7 @@ const SEV_CLS: Record<string, string> = {
                 :files="[file]"
                 :mode="filesDiffMode"
                 :collapse-key="filesCollapseKey"
+                :initial-collapsed="filesCollapsedByDefault.has(file.path)"
                 hide-toolbar
               />
             </div>
@@ -530,7 +508,7 @@ const SEV_CLS: Record<string, string> = {
   }
 }
 
-/* Remarques générales */
+/* general notes */
 .sr-general {
   padding: 0 26px 24px;
 }

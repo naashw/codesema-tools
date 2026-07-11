@@ -1,12 +1,14 @@
-// Parseur de diff unifié → structure rendable (fichiers / hunks / lignes), avec
-// rattachement des findings à la bonne ligne. Partagé entre DiffView et le shell.
+// Strict mirror of FindingSeverity/FindingKind (packages/cli/src/contract.ts):
+// kept aligned so a new value on the CLI side breaks the web build.
+export type FindingSeverity = 'critical' | 'major' | 'minor' | 'info'
+export type FindingKind = 'security' | 'perf' | 'convention' | 'design' | 'praise' | 'why'
 
 export type Finding = {
   file: string
   line?: number
   endLine?: number
-  severity: string
-  kind?: 'security' | 'perf' | 'convention' | 'design' | 'praise' | 'why'
+  severity: FindingSeverity
+  kind?: FindingKind
   title?: string
   message: string
   suggestion?: string
@@ -15,9 +17,6 @@ export type Finding = {
 export type DiffRowKind = 'hunk' | 'add' | 'del' | 'ctx' | 'meta'
 export type DiffRow = { kind: DiffRowKind; oldNo: number | null; newNo: number | null; text: string }
 
-// ── Hunk structuré (après groupement + gaps) ────────────────────────────────
-
-/** Ligne diff enrichie pour le rendu (note rattachée) */
 export type HunkLine = {
   t: 'add' | 'del' | 'ctx'
   o: number | null
@@ -26,13 +25,9 @@ export type HunkLine = {
   note?: Finding
 }
 
-/** Bloc gap entre hunks */
 export type HunkGap = { gap: number }
 
-/** Un hunk = tableau de HunkLine, ou un gap */
 export type HunkBlock = { rows: HunkLine[] } | HunkGap
-
-// ── Ligne split (après toSplit) ──────────────────────────────────────────────
 
 export type SplitRowKind = 'ctx' | 'chg' | 'note'
 
@@ -41,8 +36,8 @@ export type SplitRow =
   | { kind: 'chg'; left: HunkLine | null; right: HunkLine | null }
   | { kind: 'note'; note: Finding }
 
-/** Transforme un tableau de HunkLine en rows split-view (algo appariement positionnel
- *  del[k] ↔ add[k] par blocs consécutifs, notes émises après le bloc apparié). */
+/** Turns a HunkLine array into split-view rows using positional pairing
+ *  (del[k] <-> add[k] within consecutive blocks); notes are emitted after their paired block. */
 export function toSplit(rows: HunkLine[]): SplitRow[] {
   const out: SplitRow[] = []
   let i = 0
@@ -78,11 +73,8 @@ export type DiffFile = {
   rows: DiffRow[]
   topFindings: Finding[]
   byLine: Record<number, Finding[]>
-  /** Hunks structurés avec gaps intercalés */
   hunks: HunkBlock[]
-  /** Nb lignes ajoutées dans ce fichier */
   addCount: number
-  /** Nb lignes supprimées dans ce fichier */
   delCount: number
 }
 export type ParsedDiff = { files: DiffFile[]; unmatched: Finding[] }
@@ -98,7 +90,29 @@ export function sameFile(a: string, b: string): boolean {
   return a.endsWith('/' + b) || b.endsWith('/' + a)
 }
 
-/** Sous-ensemble de fichiers parsés correspondant à `only`, dans l'ordre de `only`. */
+// A large file starts collapsed, and so does any file past the cumulative line
+// budget already rendered. Without this, an MR with many medium files (none over
+// BIG_FILE_LINES) mounts tens of thousands of DOM nodes at once on first render.
+export const BIG_FILE_LINES = 500
+export const PAGE_LINE_BUDGET = 2000
+
+/** Paths of files to collapse upfront, based on their size and the cumulative budget. */
+export function collapsedByBudget(
+  files: { path: string; addCount: number; delCount: number }[],
+  bigFileLines = BIG_FILE_LINES,
+  pageBudget = PAGE_LINE_BUDGET,
+): Set<string> {
+  const collapsed = new Set<string>()
+  let cumulative = 0
+  for (const file of files) {
+    const lines = file.addCount + file.delCount
+    if (lines > bigFileLines || cumulative > pageBudget) collapsed.add(file.path)
+    cumulative += lines
+  }
+  return collapsed
+}
+
+/** Subset of parsed files matching `only`, in the order of `only`. */
 export function pickFiles(files: DiffFile[], only: string[]): DiffFile[] {
   const picked: DiffFile[] = []
   for (const p of only) {
@@ -179,15 +193,14 @@ export function parseDiff(diff: string, findings: Finding[] = []): ParsedDiff {
     if (f.line != null && file.rows.some((r) => r.newNo === f.line)) {
       ;(file.byLine[f.line] ??= []).push(f)
     } else if (f.line != null && file.rows.some((r) => r.oldNo === f.line && r.newNo === null)) {
-      // Finding sur une ligne supprimée (del) : indexé par clé négative pour ne pas
-      // entrer en collision avec les clés newNo (toujours > 0).
+      // Finding on a deleted line: indexed by a negative key so it doesn't collide
+      // with newNo keys (always > 0).
       ;(file.byLine[-f.line] ??= []).push(f)
     } else {
       file.topFindings.push(f)
     }
   }
 
-  // Construire les hunks structurés avec gaps et compteurs add/del
   for (const file of files) {
     file.hunks = buildHunks(file.rows, file.byLine)
     for (const row of file.rows) {
@@ -200,10 +213,10 @@ export function parseDiff(diff: string, findings: Finding[] = []): ParsedDiff {
 }
 
 /**
- * Transforme les DiffRow bruts d'un fichier en HunkBlock[] avec :
- * - gap avant le premier hunk si la ligne de départ > 1 (lignes de contexte omises)
- * - gap entre chaque hunk (lignes inchangées omises entre les deux)
- * - notes (findings) rattachées à leur ligne
+ * Turns a file's raw DiffRow[] into HunkBlock[]:
+ * - gap before the first hunk if it doesn't start at line 1 (omitted context lines)
+ * - gap between hunks (unchanged lines omitted between them)
+ * - findings attached to their line as notes
  */
 export function buildHunks(rows: DiffRow[], byLine: Record<number, Finding[]> = {}): HunkBlock[] {
   const result: HunkBlock[] = []
@@ -228,12 +241,10 @@ export function buildHunks(rows: DiffRow[], byLine: Record<number, Finding[]> = 
         const hunkNewStart = Number(hunkMatch[2])
 
         if (prevHunkLastNewLine === null) {
-          // Gap avant le premier hunk si la MR ne commence pas à la ligne 1
           if (hunkNewStart > 1) {
             result.push({ gap: hunkNewStart - 1 })
           }
         } else {
-          // Gap entre deux hunks = lignes inchangées entre la fin du hunk précédent et le début de celui-ci
           const lastOld = prevHunkLastOldLine ?? 0
           const gapSize = hunkOldStart - lastOld - 1
           if (gapSize > 0) {
@@ -258,8 +269,8 @@ export function buildHunks(rows: DiffRow[], byLine: Record<number, Finding[]> = 
       c: row.text.slice(1),
     }
 
-    // Rattacher la note de finding à la ligne.
-    // Lignes add/ctx : clé positive = newNo. Lignes del : clé négative = -oldNo.
+    // Attach the finding note to its line: add/ctx lines use a positive key (newNo),
+    // del lines use a negative key (-oldNo).
     if (row.newNo != null && byLine[row.newNo]?.length) {
       hunkLine.note = byLine[row.newNo]![0]
     } else if (row.kind === 'del' && row.oldNo != null && byLine[-row.oldNo]?.length) {
