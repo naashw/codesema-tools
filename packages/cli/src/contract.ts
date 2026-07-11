@@ -71,6 +71,8 @@ export type ReviewRecord = {
     branch: string
     target: string
     merge_base: string
+    /** HEAD au moment de la review (absent sur les archives antérieures). */
+    head_sha?: string
     repo_root: string
     created_at: string
   }

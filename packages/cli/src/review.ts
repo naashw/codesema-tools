@@ -5,7 +5,9 @@ import { spawn } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadConfig, saveConfig } from './config.js'
-import { prep } from './prep.js'
+import { isAncestor } from './git.js'
+import { mrDiff, prep } from './prep.js'
+import { findPreviousReview } from './record.js'
 import { show } from './show.js'
 import { printBanner, startSpinner } from './ui.js'
 import { AGENT_DEFS, defaultCommand, detectAgents, runAgentWizard } from './wizard.js'
@@ -63,6 +65,43 @@ Rules for the narrative:
 - review_first: 2-4 hot spots ordered by risk, highest first.
 - You MUST produce praise findings when the code deserves it; reserve severity "info" for praise/why findings.
 - Do NOT approve changes you cannot justify; prefer "request_changes" when impact is unclear.`
+
+const INCREMENTAL_INSTRUCTIONS = `An earlier review of this SAME merge request exists. Instead of the full diff, you are given:
+- <previous_review>: the review produced when HEAD was at the commit indicated below
+- <incremental_diff>: what changed on the branch since that review
+
+UPDATE the previous review into a new COMPLETE review of the whole MR:
+- Remove findings that the incremental changes fix or make obsolete.
+- Keep still-relevant findings as they are (same file/line anchors), unless the incremental diff moved that code.
+- Add findings for problems introduced by the incremental diff, grounded in it.
+- Update verdict, summary and narrative (prologue, chapters, review_first) so they describe the whole MR after these changes; keep the chapter structure stable when possible.
+Output the FULL updated review JSON (exact same schema), and NOTHING else.`
+
+/** Prompt incrémental si une review archivée de cette branche couvre un ancêtre strict de HEAD. */
+function buildIncrementalPrompt(
+  input: { branch: string; target: string; head_sha: string; repo_root: string; diff: string },
+  cwd: string,
+): { prompt: string; sinceSha: string } | null {
+  const previous = findPreviousReview(cwd, input.branch, input.target)
+  const since = previous?.meta.head_sha
+  if (!previous || !since) return null
+  if (since === input.head_sha) return null
+  if (!isAncestor(since, 'HEAD', cwd)) return null
+  const incrementalDiff = mrDiff(`${since}..HEAD`, cwd)
+  if (!incrementalDiff.trim()) return null
+
+  const { diff: _fullDiff, ...inputMeta } = input as Record<string, unknown> & { diff: string }
+  const prompt = [
+    REVIEW_INSTRUCTIONS,
+    INCREMENTAL_INSTRUCTIONS,
+    `Previous review done at commit: ${since}`,
+    `<input>\n${JSON.stringify(inputMeta, null, 2)}\n</input>`,
+    `<previous_review>\n${JSON.stringify(previous.review, null, 2)}\n</previous_review>`,
+    `<incremental_diff>\n${incrementalDiff}\n</incremental_diff>`,
+    'Output ONLY the JSON object now.',
+  ].join('\n\n')
+  return { prompt, sinceSha: since }
+}
 
 function detectAgent(cwd: string): string {
   const [first] = detectAgents(cwd)
@@ -166,6 +205,7 @@ export async function review(opts: {
   agent?: string
   port?: number
   timeout?: number
+  full?: boolean
   open: boolean
   cwd: string
 }): Promise<void> {
@@ -189,11 +229,17 @@ export async function review(opts: {
     }
     agentCommand ??= detectAgent(cwd)
   }
+  const incremental = opts.full ? null : buildIncrementalPrompt(input, cwd)
+  if (incremental) {
+    console.log(`incremental review: updating the previous review (since ${incremental.sinceSha.slice(0, 8)}) — pass --full to review from scratch`)
+  }
+  const prompt =
+    incremental?.prompt ??
+    `${REVIEW_INSTRUCTIONS}\n\n<input>\n${JSON.stringify(input, null, 2)}\n</input>\n\nOutput ONLY the JSON object now.`
+
   console.log('')
   const shortCmd = agentCommand.length > 40 ? `${agentCommand.slice(0, 37)}…` : agentCommand
   const spinner = startSpinner(`reviewing with ${shortCmd}`)
-
-  const prompt = `${REVIEW_INSTRUCTIONS}\n\n<input>\n${JSON.stringify(input, null, 2)}\n</input>\n\nOutput ONLY the JSON object now.`
 
   let out: string
   try {

@@ -13,8 +13,10 @@ const VERSION = '0.1.0'
 const HELP = `mr-review — local merge request review, told as chapters
 
 Usage:
-  mr-review review [--target <branch>] [--agent <cmd>] [--port <n>] [--timeout <s>] [--no-open]
-                                       All-in-one: prep, review with your AI agent CLI, then show
+  mr-review review [--target <branch>] [--agent <cmd>] [--port <n>] [--timeout <s>] [--full] [--no-open]
+                                       All-in-one: prep, review with your AI agent CLI, then show.
+                                       Re-runs on the same branch update the previous review
+                                       incrementally; --full forces a review from scratch
   mr-review prep [--target <branch>]   Detect branches, compute the MR diff, write .mr-review/input.json
   mr-review show [--review <file>] [--port <n>] [--no-open]
                                        Display the review (agent output) in a local web UI
@@ -53,6 +55,7 @@ async function main(): Promise<void> {
       out: { type: 'string' },
       port: { type: 'string' },
       timeout: { type: 'string' },
+      full: { type: 'boolean' },
       'no-open': { type: 'boolean' },
       help: { type: 'boolean', short: 'h' },
       version: { type: 'boolean', short: 'v' },
@@ -80,6 +83,7 @@ async function main(): Promise<void> {
         agent: values.agent ?? config.agent,
         port: parseIntFlag('port', values.port, 1, 65535) ?? config.port,
         timeout: parseIntFlag('timeout', values.timeout, 1, 86400) ?? config.timeout,
+        full: values.full,
         open: !values['no-open'],
         cwd: process.cwd(),
       })

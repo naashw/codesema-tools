@@ -50,6 +50,14 @@ export function mergeBase(a: string, b: string, cwd: string): string | null {
   return tryGit(['merge-base', a, b], cwd)
 }
 
+export function headSha(cwd: string): string {
+  return git(['rev-parse', 'HEAD'], cwd)
+}
+
+export function isAncestor(a: string, b: string, cwd: string): boolean {
+  return tryGit(['merge-base', '--is-ancestor', a, b], cwd) !== null
+}
+
 export function revListCount(range: string, cwd: string): number | null {
   const out = tryGit(['rev-list', '--count', range], cwd)
   if (out === null) return null

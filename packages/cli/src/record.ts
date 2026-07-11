@@ -30,6 +30,7 @@ function buildRecord(agentOutputPath: string, dir: string): ReviewRecord {
       branch: input.branch,
       target: input.target,
       merge_base: input.merge_base,
+      ...(input.head_sha ? { head_sha: input.head_sha } : {}),
       repo_root: input.repo_root,
       created_at: new Date().toISOString(),
     },
@@ -46,6 +47,24 @@ function latestSavedRecord(reviewsDir: string): { record: ReviewRecord; path: st
   if (!last) return null
   const path = join(reviewsDir, last)
   return { record: readJson(path) as ReviewRecord, path }
+}
+
+/** Dernière review archivée de cette branche vers cette cible, avec head_sha connu. */
+export function findPreviousReview(cwd: string, branch: string, target: string): ReviewRecord | null {
+  const reviewsDir = join(cwd, '.mr-review', 'reviews')
+  if (!existsSync(reviewsDir)) return null
+  const names = readdirSync(reviewsDir).filter((n) => n.endsWith('.json')).sort().reverse()
+  for (const name of names) {
+    try {
+      const record = readJson(join(reviewsDir, name)) as ReviewRecord
+      if (record?.meta?.branch === branch && record.meta.target === target && record.meta.head_sha) {
+        return record
+      }
+    } catch {
+      // archive illisible : on remonte à la précédente
+    }
+  }
+  return null
 }
 
 export type ResolvedRecord = {

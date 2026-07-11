@@ -4,7 +4,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ensureWorkDir } from './config.js'
-import { currentBranch, git, mergeBase, refExists, repoRoot, revListCount, tryExec, tryGit } from './git.js'
+import { currentBranch, git, headSha, mergeBase, refExists, repoRoot, revListCount, tryExec, tryGit } from './git.js'
 
 const TARGET_CANDIDATES = ['develop', 'main', 'master'] as const
 
@@ -32,6 +32,7 @@ export type PrepInput = {
   target: string
   target_source: string
   merge_base: string
+  head_sha: string
   repo_root: string
   commits: string[]
   files: { path: string; additions: number; deletions: number }[]
@@ -120,6 +121,14 @@ function excludePathspecs(cwd: string): string[] {
   return patterns.map((p) => (p.includes('/') ? `:(exclude,glob)${p}` : `:(exclude,glob)**/${p}`))
 }
 
+/** Diff MR sur un range, mêmes exclusions que prep (lockfiles, .mr-review-ignore).
+ *  quotePath=false : sans lui, git échappe les chemins non-ASCII ("caf\303\251.txt")
+ *  et le matching finding↔fichier casse dans l'UI. */
+export function mrDiff(range: string, cwd: string): string {
+  const excludes = excludePathspecs(cwd)
+  return git(['-c', 'core.quotePath=false', 'diff', '--no-color', range, '--', '.', ...excludes], cwd)
+}
+
 export function prep(opts: { target?: string; cwd: string }): PrepInput {
   const cwd = repoRoot(opts.cwd)
   const branch = currentBranch(cwd)
@@ -141,9 +150,7 @@ export function prep(opts: { target?: string; cwd: string }): PrepInput {
 
   const excludes = excludePathspecs(cwd)
   const range = `${target}...HEAD`
-  // quotePath=false : sans lui, git échappe les chemins non-ASCII ("caf\303\251.txt")
-  // et le matching finding↔fichier casse dans l'UI.
-  const diff = git(['-c', 'core.quotePath=false', 'diff', '--no-color', range, '--', '.', ...excludes], cwd)
+  const diff = mrDiff(range, cwd)
   if (!diff.trim()) {
     const dirty = tryGit(['status', '--porcelain'], cwd)
     const hint = dirty?.trim()
@@ -179,6 +186,7 @@ export function prep(opts: { target?: string; cwd: string }): PrepInput {
     target,
     target_source: source,
     merge_base: mb,
+    head_sha: headSha(cwd),
     repo_root: cwd,
     commits,
     files,
