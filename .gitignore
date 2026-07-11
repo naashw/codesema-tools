@@ -4,3 +4,7 @@ web-dist/
 .mr-review/
 *.log
 .DS_Store
+
+# copies prepack (source = racine)
+packages/cli/LICENSE
+packages/cli/README.md

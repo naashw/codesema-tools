@@ -15,12 +15,19 @@ Local merge request review, told as chapters. **Your** AI agent (Claude Code, Co
 2. **Your agent** (driven by the bundled skill) reviews the diff like a senior reviewer and writes a structured review: prologue, ordered chapters with risk/take/check, typed findings (security/perf/convention/design/praise/why), and what to review first.
 3. **`mr-review show`** opens a local web UI: guided chapter-by-chapter reading, split/unified diff with inline notes, file tree, read/checked progress.
 
+## Requirements
+
+- Node.js ≥ 20 and `git`
+- For the one-shot `review` command: an AI agent CLI (`claude` is auto-detected; any other works via `--agent '<cmd>'`)
+- Optional: `glab` or `gh` on the PATH, to auto-detect the target branch from the open MR/PR
+
 ## Install
 
-Install the skill in your agent (this also teaches it how to run the CLI via `npx`):
+The CLI needs no install (`npx -y mr-review …`). To teach your agent the flow, install the bundled skill — it is plain agent-agnostic markdown:
 
 ```bash
-npx skills add <org>/mr-review
+# Claude Code, from a clone of this repo (global install):
+cp -r skills/mr-review ~/.claude/skills/mr-review
 ```
 
 Then, in any repo, on your feature branch, ask your agent: `/mr-review`.
@@ -42,6 +49,14 @@ npx -y mr-review show
 
 - `.mr-review/PROMPT.md` — your team's review instructions, merged into the agent prompt.
 - `.mr-review-ignore` — glob patterns excluded from the diff (lockfiles, minified files and sourcemaps are excluded by default).
+
+## Troubleshooting
+
+- `could not detect the target branch` — no MR/PR found and no develop/main/master to compare against: pass `--target <branch>`.
+- `empty diff … nothing to review` — mr-review reviews **committed** work: commit your changes first.
+- `agent timed out` — raise the budget with `--timeout <seconds>` (default 900).
+- `no supported agent CLI found` — install `claude`, or pass any command with `--agent '<cmd>'` (it receives the prompt on stdin and must print the review JSON on stdout).
+- Port busy — mr-review scans 20 ports from the preferred one (default 4400); pick another base with `--port <n>`.
 
 ## Development
 

@@ -3,6 +3,17 @@
   "version": "0.1.0",
   "description": "Local merge request review, told as chapters. Your AI agent reviews, mr-review displays.",
   "license": "MIT",
+  "author": "Hasan TASKIN",
+  "keywords": [
+    "code-review",
+    "merge-request",
+    "pull-request",
+    "ai",
+    "agent",
+    "cli",
+    "git",
+    "diff"
+  ],
   "type": "module",
   "bin": {
     "mr-review": "./dist/index.mjs"
@@ -13,7 +24,9 @@
   ],
   "scripts": {
     "build": "tsdown && node scripts/embed-web.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepack": "node scripts/prepack.mjs",
+    "prepublishOnly": "npm run build --prefix ../web && npm run build"
   },
   "engines": {
     "node": ">=20"
