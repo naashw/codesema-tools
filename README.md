@@ -18,8 +18,16 @@ Local merge request review, told as chapters. **Your** AI agent (Claude Code, Co
 ## Requirements
 
 - Node.js ≥ 20 and `git`
-- For the one-shot `review` command: an AI agent CLI (`claude` is auto-detected; any other works via `--agent '<cmd>'`)
+- For the one-shot `review` command: an AI agent CLI — `claude` (Claude Code), `codex` (OpenAI) and `gemini` (Google) are auto-detected; anything else works via `--agent '<cmd>'`
 - Optional: `glab` or `gh` on the PATH, to auto-detect the target branch from the open MR/PR
+
+## Pick your agent, model and effort
+
+```bash
+npx -y mr-review config
+```
+
+An interactive wizard lists the agent CLIs found on your PATH, then asks for the model and the reasoning effort (when the provider supports one), and saves the resulting command to `.mr-review/config.json`. The first `mr-review review` run in a terminal offers the same wizard automatically. `--agent '<cmd>'` always overrides it — use it for CLIs without stdin support too, e.g. `--agent 'opencode run "$(cat)"'`.
 
 ## Install
 

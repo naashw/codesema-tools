@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util'
+import { loadConfig } from './config.js'
+import { tryGit } from './git.js'
 import { prep } from './prep.js'
 import { review } from './review.js'
 import { show } from './show.js'
+import { configCommand } from './wizard.js'
 
 const VERSION = '0.1.0'
 
@@ -14,6 +17,7 @@ Usage:
   mr-review prep [--target <branch>]   Detect branches, compute the MR diff, write .mr-review/input.json
   mr-review show [--review <file>] [--port <n>] [--no-open]
                                        Display the review (agent output) in a local web UI
+  mr-review config                     Pick the AI agent, model and effort for this repo (interactive)
 
 Options:
   --target <branch>   Target branch of the MR (default: auto-detected via glab/gh, origin/HEAD, then heuristic)
@@ -61,27 +65,35 @@ async function main(): Promise<void> {
     return
   }
 
+  // Config du repo (.mr-review/config.json) : flags CLI prioritaires partout.
+  const repoRoot = tryGit(['rev-parse', '--show-toplevel'], process.cwd())
+  const config = repoRoot ? loadConfig(repoRoot) : {}
+
   switch (command) {
     case 'review':
       await review({
-        target: values.target,
-        agent: values.agent,
-        port: parseIntFlag('port', values.port, 1, 65535),
-        timeout: parseIntFlag('timeout', values.timeout, 1, 86400),
+        target: values.target ?? config.target,
+        agent: values.agent ?? config.agent,
+        port: parseIntFlag('port', values.port, 1, 65535) ?? config.port,
+        timeout: parseIntFlag('timeout', values.timeout, 1, 86400) ?? config.timeout,
         open: !values['no-open'],
         cwd: process.cwd(),
       })
       break
     case 'prep':
-      prep({ target: values.target, cwd: process.cwd() })
+      prep({ target: values.target ?? config.target, cwd: process.cwd() })
       break
     case 'show':
       await show({
         review: values.review,
-        port: parseIntFlag('port', values.port, 1, 65535),
+        port: parseIntFlag('port', values.port, 1, 65535) ?? config.port,
         open: !values['no-open'],
         cwd: process.cwd(),
       })
+      break
+    case 'config':
+      if (!repoRoot) throw new Error('not inside a git repository — run `mr-review config` from your repo')
+      await configCommand(repoRoot)
       break
     default:
       console.error(`unknown command: ${command}\n`)

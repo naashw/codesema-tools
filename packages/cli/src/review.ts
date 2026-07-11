@@ -4,10 +4,11 @@
 import { spawn } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { tryExec } from './git.js'
+import { loadConfig, saveConfig } from './config.js'
 import { prep } from './prep.js'
 import { show } from './show.js'
 import { printBanner, startSpinner } from './ui.js'
+import { AGENT_DEFS, defaultCommand, detectAgents, runAgentWizard } from './wizard.js'
 
 const REVIEW_INSTRUCTIONS = `You are a senior code reviewer. Review the merge request provided in the <input> block below (JSON: branch, target, commits, files, and the full unified diff). Do NOT use any tools; base your review ONLY on the provided input. Then output the review as a single JSON object and NOTHING else (no prose, no code fences).
 
@@ -64,9 +65,10 @@ Rules for the narrative:
 - Do NOT approve changes you cannot justify; prefer "request_changes" when impact is unclear.`
 
 function detectAgent(cwd: string): string {
-  if (tryExec('claude', ['--version'], cwd) !== null) return 'claude -p'
+  const [first] = detectAgents(cwd)
+  if (first) return defaultCommand(first)
   throw new Error(
-    "no supported agent CLI found on PATH (looked for: claude) — pass one with --agent '<command>' (it receives the full prompt on stdin and must print the review JSON on stdout)",
+    `no supported agent CLI found on PATH (looked for: ${AGENT_DEFS.map((d) => d.bin).join(', ')}) — pass one with --agent '<command>' (it receives the full prompt on stdin and must print the review JSON on stdout)`,
   )
 }
 
@@ -173,7 +175,20 @@ export async function review(opts: {
   const cwd = input.repo_root
   const dir = join(cwd, '.mr-review')
 
-  const agentCommand = opts.agent ?? detectAgent(cwd)
+  let agentCommand = opts.agent
+  if (!agentCommand) {
+    // Premier run interactif sans config : wizard agent/modèle/effort, persisté.
+    if (process.stdin.isTTY && process.stdout.isTTY) {
+      console.log('')
+      const chosen = await runAgentWizard(cwd)
+      if (chosen) {
+        agentCommand = chosen
+        saveConfig(cwd, { ...loadConfig(cwd), agent: chosen })
+        console.log('saved to .mr-review/config.json — reused next time (change it with `mr-review config`)')
+      }
+    }
+    agentCommand ??= detectAgent(cwd)
+  }
   console.log('')
   const shortCmd = agentCommand.length > 40 ? `${agentCommand.slice(0, 37)}…` : agentCommand
   const spinner = startSpinner(`reviewing with ${shortCmd}`)

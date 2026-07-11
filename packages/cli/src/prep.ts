@@ -1,8 +1,9 @@
 // `mr-review prep` : détecte la branche courante et la branche cible, calcule le
 // diff de la MR, et écrit .mr-review/input.json pour l'agent IA.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { ensureWorkDir } from './config.js'
 import { currentBranch, git, mergeBase, refExists, repoRoot, revListCount, tryExec, tryGit } from './git.js'
 
 const TARGET_CANDIDATES = ['develop', 'main', 'master'] as const
@@ -185,11 +186,7 @@ export function prep(opts: { target?: string; cwd: string }): PrepInput {
     diff,
   }
 
-  const dir = join(cwd, '.mr-review')
-  mkdirSync(dir, { recursive: true })
-  // Dossier auto-ignoré par git : aucun impact sur le .gitignore du repo hôte.
-  const selfIgnore = join(dir, '.gitignore')
-  if (!existsSync(selfIgnore)) writeFileSync(selfIgnore, '*\n')
+  const dir = ensureWorkDir(cwd)
   const inputPath = join(dir, 'input.json')
   writeFileSync(inputPath, JSON.stringify(input, null, 2))
 
