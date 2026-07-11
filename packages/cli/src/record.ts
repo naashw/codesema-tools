@@ -1,10 +1,7 @@
-// Résolution du ReviewRecord consommé par `show` et `export` : sortie agent
-// fraîche (.codesema/review.json ou --review) sinon dernière review archivée.
-
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ReviewRecord } from './contract.js'
-import { sanitizeReview } from './contract.js'
+import { sanitizeRecord, sanitizeReview } from './contract.js'
 import type { PrepInput } from './prep.js'
 
 function slug(s: string): string {
@@ -16,7 +13,6 @@ function stamp(d: Date): string {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
 }
 
-/** Archive la review dans .codesema/reviews/ et renvoie le chemin écrit. */
 export function archiveRecord(record: ReviewRecord, cwd: string): string {
   const reviewsDir = join(cwd, '.codesema', 'reviews')
   mkdirSync(reviewsDir, { recursive: true })
@@ -61,25 +57,31 @@ function buildRecord(agentOutputPath: string, dir: string): ReviewRecord {
 function latestSavedRecord(reviewsDir: string): { record: ReviewRecord; path: string } | null {
   if (!existsSync(reviewsDir)) return null
   const names = readdirSync(reviewsDir).filter((n) => n.endsWith('.json')).sort()
-  const last = names[names.length - 1]
-  if (!last) return null
-  const path = join(reviewsDir, last)
-  return { record: readJson(path) as ReviewRecord, path }
+  for (let i = names.length - 1; i >= 0; i--) {
+    const path = join(reviewsDir, names[i]!)
+    try {
+      const record = sanitizeRecord(readJson(path))
+      if (record) return { record, path }
+    } catch {
+      // unreadable archive: fall back to the previous one
+    }
+  }
+  return null
 }
 
-/** Dernière review archivée de cette branche vers cette cible, avec head_sha connu. */
+/** Last archived review of this branch to this target, with a known head_sha. */
 export function findPreviousReview(cwd: string, branch: string, target: string): ReviewRecord | null {
   const reviewsDir = join(cwd, '.codesema', 'reviews')
   if (!existsSync(reviewsDir)) return null
   const names = readdirSync(reviewsDir).filter((n) => n.endsWith('.json')).sort().reverse()
   for (const name of names) {
     try {
-      const record = readJson(join(reviewsDir, name)) as ReviewRecord
-      if (record?.meta?.branch === branch && record.meta.target === target && record.meta.head_sha) {
+      const record = sanitizeRecord(readJson(join(reviewsDir, name)))
+      if (record?.meta.branch === branch && record.meta.target === target && record.meta.head_sha) {
         return record
       }
     } catch {
-      // archive illisible : on remonte à la précédente
+      // unreadable archive: fall back to the previous one
     }
   }
   return null
@@ -87,7 +89,7 @@ export function findPreviousReview(cwd: string, branch: string, target: string):
 
 export type ResolvedRecord = {
   record: ReviewRecord
-  /** true si construit depuis une sortie agent fraîche (pas encore archivée). */
+  /** true when built from fresh agent output, not yet archived. */
   fresh: boolean
   sourcePath: string
 }

@@ -1,5 +1,4 @@
-// Contrat de review v2 (storytelling) + sanitizer.
-// Toutes les entrées agent passent ici : whitelist + troncature, jamais de throw.
+// All agent input passes through here: whitelist and truncate, never throw.
 
 export type NarrativeConfidence = 'high' | 'medium' | 'low'
 export type NarrativeRisk = 'high' | 'medium' | 'low'
@@ -71,7 +70,7 @@ export type ReviewRecord = {
     branch: string
     target: string
     merge_base: string
-    /** HEAD au moment de la review (absent sur les archives antérieures). */
+    /** HEAD at review time (absent on older archives). */
     head_sha?: string
     repo_root: string
     created_at: string
@@ -231,4 +230,28 @@ export function sanitizeReview(raw: unknown): SanitizedReview {
   const findings = sanitizeFindings(r.findings)
   const narrative = sanitizeNarrative(r.narrative, findings.length)
   return { verdict, summary, findings, narrative }
+}
+
+/**
+ * Revalidates a ReviewRecord read back from disk (a possibly corrupt archive,
+ * hand-edited, or written by an older schema). Returns null when the input is not
+ * a usable object; shape fields are normalized.
+ */
+export function sanitizeRecord(raw: unknown): ReviewRecord | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const m = (r.meta && typeof r.meta === 'object' ? r.meta : {}) as Record<string, unknown>
+  const str = (v: unknown): string => (typeof v === 'string' ? v : '')
+  const meta: ReviewRecord['meta'] = {
+    title: str(m.title),
+    branch: str(m.branch),
+    target: str(m.target),
+    merge_base: str(m.merge_base),
+    ...(typeof m.head_sha === 'string' && m.head_sha ? { head_sha: m.head_sha } : {}),
+    repo_root: str(m.repo_root),
+    created_at: typeof m.created_at === 'string' && m.created_at ? m.created_at : new Date().toISOString(),
+  }
+  const commits = Array.isArray(r.commits) ? r.commits.filter((c): c is string => typeof c === 'string') : []
+  const diff = typeof r.diff === 'string' ? r.diff : ''
+  return { version: 1, meta, commits, diff, review: sanitizeReview(r.review) }
 }

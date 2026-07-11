@@ -1,5 +1,4 @@
-// Types du record servi par `codesema show` (/api/review).
-// Miroir du contrat CLI (packages/cli/src/contract.ts).
+// Mirrors the CLI contract types by hand (packages/cli/src/contract.ts).
 
 import type { Finding } from './composables/useDiff'
 
@@ -13,7 +12,7 @@ export type NarrativeChapter = {
   check?: string | null
 }
 
-/** Chapitre normalisé pour l'affichage (check: null → undefined, cf. ReviewShell). */
+/** Chapter normalized for display (check: null becomes undefined; see ReviewShell). */
 export type ChapterView = Omit<NarrativeChapter, 'check'> & { check?: string }
 
 export type ReviewFirstItem = {
@@ -42,6 +41,8 @@ export type ReviewRecord = {
     branch: string
     target: string
     merge_base: string
+    /** HEAD at review time (absent on older archives). */
+    head_sha?: string
     repo_root: string
     created_at: string
   }
@@ -55,8 +56,7 @@ export type ReviewRecord = {
   }
 }
 
-// Session live servie par `codesema review` (/api/status, /api/events).
-// Miroir de packages/cli/src/serve.ts et partial.ts.
+// Mirrors packages/cli/src/serve.ts and partial.ts.
 
 export type LiveInput = {
   branch: string
