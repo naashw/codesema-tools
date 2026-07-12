@@ -15,6 +15,10 @@ export type CodesemaConfig = {
   timeout?: number
   /** UI and review language (ISO 639-1). */
   language?: SupportedLanguage
+  /** Cloud sync (codesema.com): base URL override and workspace credentials. */
+  syncUrl?: string
+  syncWorkspaceId?: string
+  syncSecret?: string
 }
 
 function parseConfig(path: string): CodesemaConfig {
@@ -29,6 +33,9 @@ function parseConfig(path: string): CodesemaConfig {
       ...(str(raw.effort) ? { effort: str(raw.effort) } : {}),
       ...(str(raw.target) ? { target: str(raw.target) } : {}),
       ...(isSupportedLanguage(raw.language) ? { language: raw.language } : {}),
+      ...(str(raw.syncUrl) ? { syncUrl: str(raw.syncUrl) } : {}),
+      ...(str(raw.syncWorkspaceId) ? { syncWorkspaceId: str(raw.syncWorkspaceId) } : {}),
+      ...(str(raw.syncSecret) ? { syncSecret: str(raw.syncSecret) } : {}),
       ...(Number.isInteger(raw.port) ? { port: raw.port as number } : {}),
       ...(Number.isInteger(raw.timeout) ? { timeout: raw.timeout as number } : {}),
     }
