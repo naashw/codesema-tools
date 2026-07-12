@@ -26,13 +26,14 @@
     "build": "tsdown && node scripts/embed-web.mjs",
     "typecheck": "tsc --noEmit",
     "prepack": "node scripts/prepack.mjs",
-    "prepublishOnly": "npm run build --prefix ../web && npm run build"
+    "prepublishOnly": "npm run build --prefix ../contract && npm run build --prefix ../web && npm run build"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "codesema-contract": "workspace:*",
     "tsdown": "^0.22.5",
     "typescript": "^6.0.3"
   }

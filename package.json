@@ -7,11 +7,12 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "bun run build:web && bun run build:cli",
+    "build": "bun run build:contract && bun run build:web && bun run build:cli",
+    "build:contract": "bun run --cwd packages/contract build",
     "build:web": "bun run --cwd packages/web build",
     "build:cli": "bun run --cwd packages/cli build",
-    "typecheck": "bun run --cwd packages/cli typecheck && bun run --cwd packages/web typecheck",
-    "test": "bun test packages/cli packages/web"
+    "typecheck": "bun run --cwd packages/contract typecheck && bun run --cwd packages/cli typecheck && bun run --cwd packages/web typecheck",
+    "test": "bun test packages/cli packages/web packages/contract"
   },
   "engines": {
     "node": ">=20"

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { sanitizeFindings, sanitizeNarrative, sanitizeRecord, sanitizeReview } from './contract.js'
+import { sanitizeFindings, sanitizeNarrative, sanitizeRecord, sanitizeReview } from './index.js'
 
 describe('sanitizeReview', () => {
   test('empty input: safe defaults', () => {
