@@ -69,6 +69,11 @@ const en = {
   'rail.mr': 'MR',
   'rail.merge': 'MERGE ✓',
 
+  'tour.start': 'Guided reading',
+  'tour.prev': 'Previous note',
+  'tour.next': 'Next note',
+  'tour.finish': 'Finish reading',
+
   'diffView.modeUnified': 'Unified',
   'diffView.modeSplit': 'Split',
   'diffView.noteCount': '{n} note | {n} notes',
@@ -162,6 +167,11 @@ const fr: Record<MessageKey, string> = {
   'rail.aria': 'Progression de la revue',
   'rail.mr': 'MR',
   'rail.merge': 'MERGE ✓',
+
+  'tour.start': 'Lecture guidée',
+  'tour.prev': 'Note précédente',
+  'tour.next': 'Note suivante',
+  'tour.finish': 'Terminer la lecture',
 
   'diffView.modeUnified': 'Unifié',
   'diffView.modeSplit': 'Côte à côte',

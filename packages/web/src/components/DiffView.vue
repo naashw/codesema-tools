@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import type { DiffFile, Finding, FindingSeverity, HunkBlock, HunkLine, SplitRow } from '../composables/useDiff'
 import { collapsedByBudget, toSplit } from '../composables/useDiff'
 import { t } from '../i18n'
@@ -12,6 +12,8 @@ const props = defineProps<{
   /** Forces the initial collapse of these files. The caller decides on a cumulative
    *  budget when each DiffView gets a single file and can't see the page-wide total. */
   initialCollapsed?: boolean
+  /** Scroll to (and flash) the note with this finding id; nonce retriggers the same id. */
+  reveal?: { id: number; nonce: number } | null
 }>()
 
 const isClient = typeof window !== 'undefined'
@@ -136,11 +138,43 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
   if (lineNo == null) return []
   return (byLine[lineNo] ?? []).slice(1)
 }
+
+const rootEl = ref<HTMLElement | null>(null)
+
+function fileContaining(id: number): DiffFile | undefined {
+  return props.files.find(
+    (f) =>
+      f.topFindings.some((finding) => finding.id === id) ||
+      Object.values(f.byLine).some((arr) => arr.some((finding) => finding.id === id)),
+  )
+}
+
+async function revealFinding(id: number): Promise<void> {
+  const file = fileContaining(id)
+  if (file && collapsed.value.has(file.path)) {
+    collapsed.value.delete(file.path)
+    collapsed.value = new Set(collapsed.value)
+  }
+  await nextTick()
+  const anchor = rootEl.value?.querySelector(`[data-finding-id="${id}"]`)
+  if (!(anchor instanceof HTMLElement)) return
+  anchor.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  const card = anchor.closest('.nlr-note') ?? anchor
+  card.classList.add('nlr-note--flash')
+  setTimeout(() => card.classList.remove('nlr-note--flash'), 1600)
+}
+
+watch(
+  () => props.reveal,
+  (r) => {
+    if (r) void revealFinding(r.id)
+  },
+)
 </script>
 
 <template>
   <p v-if="!files.length" class="codesema-muted text-sm">{{ $t('reviews.noDiff') }}</p>
-  <div v-else class="diff-view-root">
+  <div v-else ref="rootEl" class="diff-view-root">
     <div v-if="!hideToolbar" class="diff-toolbar">
       <div class="diff-seg">
         <button :class="{ on: diffMode === 'unified' }" @click="setMode('unified')">
@@ -178,6 +212,7 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
               v-for="(f, i) in file.topFindings"
               :key="'top-' + i"
               class="nlr-note"
+              :data-finding-id="f.id"
               :style="{ borderLeftColor: noteBorderColor(f) }"
             >
               <div class="nlr-note-head">
@@ -230,6 +265,7 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
                   <div
                     v-if="row.note"
                     class="nlr-note nlr-note-inline"
+                    :data-finding-id="row.note.id"
                     :style="{ borderLeftColor: noteBorderColor(row.note) }"
                   >
                     <div class="nlr-note-head">
@@ -264,7 +300,7 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
                         :key="'extra-' + en"
                       >
                         <div class="nlr-note-sep" />
-                        <div class="nlr-note-head">
+                        <div class="nlr-note-head" :data-finding-id="extraNote.id">
                           <span class="nlr-mark">✦</span>
                           <span class="nlr-name">{{ $t('note.author') }}</span>
                           <span
@@ -303,6 +339,7 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
                   <div v-if="srow.kind === 'note'" class="srd-split-note-row">
                     <div
                       class="nlr-note nlr-note-split"
+                      :data-finding-id="srow.note.id"
                       :style="{ borderLeftColor: noteBorderColor(srow.note) }"
                     >
                       <div class="nlr-note-head">
@@ -758,6 +795,22 @@ function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): F
   height: 1px;
   background: var(--codesema-line);
   margin: 10px 0;
+}
+
+.nlr-note--flash {
+  animation: nlr-flash 1.6s ease;
+}
+
+@keyframes nlr-flash {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--codesema-accent) 60%, transparent);
+  }
+  35% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--codesema-accent) 45%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
 }
 
 /* suggested fix */

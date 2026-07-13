@@ -15,6 +15,7 @@ const props = defineProps<{
   selectedIndex: number
   readSet: Set<number>
   checkedSet: Set<number>
+  reveal?: { id: number; nonce: number } | null
 }>()
 
 const emit = defineEmits<{
@@ -71,7 +72,10 @@ const stepFindingCount = computed(() => stepFindings.value.length)
 const stepFiles = computed(() => {
   if (!step.value || !props.diff) return []
   const parsed = parseDiff(props.diff, stepFindings.value)
-  return pickFiles(parsed.files, step.value.files)
+  // Findings can reference a file the step forgot to list: include it so every
+  // note of the step stays reachable (guided tour scrolls to note anchors).
+  const findingFiles = stepFindings.value.map((f) => f.file)
+  return pickFiles(parsed.files, [...step.value.files, ...findingFiles])
 })
 
 const stepDelta = computed(() => {
@@ -234,7 +238,7 @@ function scrollToFile(filePath: string) {
       </div>
 
       <div v-if="diff" class="steprev-diff">
-        <DiffView :files="stepFiles" />
+        <DiffView :files="stepFiles" :reveal="reveal" />
       </div>
       <p v-else class="codesema-muted steprev-nodiff">{{ $t('reviews.noDiff') }}</p>
 

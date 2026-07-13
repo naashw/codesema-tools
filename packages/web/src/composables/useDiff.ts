@@ -12,6 +12,8 @@ export type Finding = {
   title?: string
   message: string
   suggestion?: string
+  /** UI-assigned global index (position in record.review.findings), not part of the contract. */
+  id?: number
 }
 
 export type DiffRowKind = 'hunk' | 'add' | 'del' | 'ctx' | 'meta'

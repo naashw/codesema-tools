@@ -47,6 +47,14 @@ export function useReviewProgress(reviewId: string) {
     saveState(readSet.value, checkedSet.value)
   }
 
+  function markRead(index: number) {
+    if (readSet.value.has(index)) return
+    const next = new Set(readSet.value)
+    next.add(index)
+    readSet.value = next
+    saveState(readSet.value, checkedSet.value)
+  }
+
   function toggleChecked(index: number) {
     const next = new Set(checkedSet.value)
     if (next.has(index)) {
@@ -63,5 +71,6 @@ export function useReviewProgress(reviewId: string) {
     checkedSet,
     toggleRead,
     toggleChecked,
+    markRead,
   }
 }

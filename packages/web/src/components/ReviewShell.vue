@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onUnmounted, ref } from 'vue'
 import type { Finding } from '../composables/useDiff'
 import { collapsedByBudget, parseDiff, sameFile } from '../composables/useDiff'
 import { buildFixPrompt, isActionable } from '../composables/useFixPrompt'
+import { buildNoteTour } from '../composables/useNoteTour'
 import { useReviewProgress } from '../composables/useReviewProgress'
 import type { ReviewRecord } from '../types'
 import ReviewPrologue from './ReviewPrologue.vue'
@@ -19,7 +20,8 @@ const props = defineProps<{
 const isClient = typeof window !== 'undefined'
 
 const meta = computed(() => props.record.meta)
-const findings = computed<Finding[]>(() => props.record.review.findings)
+// Findings get their global index as id so note anchors survive per-step re-parsing.
+const findings = computed<Finding[]>(() => props.record.review.findings.map((f, i) => ({ ...f, id: i })))
 const narrative = computed(() => props.record.review.narrative)
 // check: null (contract) normalized to undefined (expected by the child components)
 const steps = computed(() =>
@@ -71,7 +73,7 @@ async function copyFixPrompt() {
 onUnmounted(() => clearTimeout(copiedTimer))
 
 const progressKey = `${props.record.meta.branch}:${props.record.meta.created_at}`
-const { readSet, checkedSet, toggleRead, toggleChecked } = useReviewProgress(progressKey)
+const { readSet, checkedSet, toggleRead, toggleChecked, markRead } = useReviewProgress(progressKey)
 
 const activeTab = ref<'steps' | 'files'>('steps')
 
@@ -80,15 +82,78 @@ const isGuidedMode = computed(() => guidedIndex.value !== null)
 
 function onStepSelect(index: number) {
   guidedIndex.value = index
+  realignTour(index)
   syncHash()
 }
 function onGuidedBack() {
   guidedIndex.value = null
+  tourIndex.value = null
   syncHash()
 }
 function onGuidedNavigate(index: number) {
   guidedIndex.value = index
+  realignTour(index)
   syncHash()
+}
+
+// ── Guided note tour ────────────────────────────────────────────
+const tour = computed(() => buildNoteTour(steps.value, findings.value.length))
+const tourIndex = ref<number | null>(null)
+const reveal = ref<{ id: number; nonce: number } | null>(null)
+let revealNonce = 0
+
+const tourStop = computed(() => (tourIndex.value === null ? null : (tour.value[tourIndex.value] ?? null)))
+const tourHasPrev = computed(() => tourIndex.value !== null && tourIndex.value > 0)
+const tourHasNext = computed(() => tourIndex.value !== null && tourIndex.value < tour.value.length - 1)
+
+async function applyTourStop(index: number) {
+  const stop = tour.value[index]
+  if (!stop) return
+  const previous = tourStop.value
+  if (previous && stop.stepIndex > previous.stepIndex) markRead(previous.stepIndex)
+  tourIndex.value = index
+  if (guidedIndex.value !== stop.stepIndex) {
+    guidedIndex.value = stop.stepIndex
+    syncHash()
+  }
+  await nextTick()
+  if (stop.findingId === null) {
+    if (isClient) window.scrollTo({ top: 0, behavior: 'smooth' })
+    return
+  }
+  reveal.value = { id: stop.findingId, nonce: ++revealNonce }
+}
+
+function startTour() {
+  void applyTourStop(0)
+}
+
+function tourNext() {
+  if (tourIndex.value === null) return
+  if (tourHasNext.value) {
+    void applyTourStop(tourIndex.value + 1)
+    return
+  }
+  finishTour()
+}
+
+function tourPrev() {
+  if (tourIndex.value !== null && tourHasPrev.value) void applyTourStop(tourIndex.value - 1)
+}
+
+function finishTour() {
+  const stop = tourStop.value
+  if (stop) markRead(stop.stepIndex)
+  tourIndex.value = null
+  guidedIndex.value = null
+  syncHash()
+}
+
+/** Manual step navigation during a tour: snap the tour onto the chosen step. */
+function realignTour(stepIndex: number) {
+  if (tourIndex.value === null) return
+  const at = tour.value.findIndex((s) => s.stepIndex === stepIndex && s.findingId === null)
+  tourIndex.value = at >= 0 ? at : null
 }
 
 function syncHash() {
@@ -224,6 +289,7 @@ const SEV_CLS: Record<string, string> = {
         :selected-index="guidedIndex!"
         :read-set="readSet"
         :checked-set="checkedSet"
+        :reveal="reveal"
         @back="onGuidedBack"
         @toggle-read="toggleRead"
         @toggle-checked="toggleChecked"
@@ -323,6 +389,43 @@ const SEV_CLS: Record<string, string> = {
         </div>
       </div>
       <p v-else class="codesema-muted sr-empty-msg">{{ $t('reviews.noDiff') }}</p>
+    </div>
+
+    <div v-if="activeTab === 'steps' && hasSteps && tour.length" class="sr-tour">
+      <button v-if="tourIndex === null" class="sr-tour-start" @click="startTour">
+        <span class="sr-tour-mark">✦</span>
+        {{ $t('tour.start') }}
+      </button>
+      <template v-else>
+        <button
+          class="sr-tour-btn"
+          :disabled="!tourHasPrev"
+          :title="$t('tour.prev')"
+          :aria-label="$t('tour.prev')"
+          @click="tourPrev"
+        >
+          ‹
+        </button>
+        <span class="sr-tour-count">{{ tourIndex + 1 }}<span class="sr-tour-total"> / {{ tour.length }}</span></span>
+        <button
+          v-if="tourHasNext"
+          class="sr-tour-btn"
+          :title="$t('tour.next')"
+          :aria-label="$t('tour.next')"
+          @click="tourNext"
+        >
+          ›
+        </button>
+        <button
+          v-else
+          class="sr-tour-btn sr-tour-btn--done"
+          :title="$t('tour.finish')"
+          :aria-label="$t('tour.finish')"
+          @click="tourNext"
+        >
+          ✓
+        </button>
+      </template>
     </div>
 
   </div>
@@ -731,6 +834,97 @@ const SEV_CLS: Record<string, string> = {
 .sr-empty-msg {
   padding: 32px 26px;
   font-size: 13px;
+}
+
+/* ── Guided note tour (floating pill) ───────────────────────── */
+.sr-tour {
+  position: fixed;
+  bottom: 22px;
+  right: 22px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--codesema-panel);
+  border: 1px solid var(--codesema-line);
+  border-radius: 999px;
+  padding: 7px 10px;
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--codesema-ink) 14%, transparent);
+}
+
+.sr-tour-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--codesema-ink-2);
+  cursor: pointer;
+  padding: 2px 6px;
+  transition: color 0.12s ease;
+}
+
+.sr-tour-start:hover {
+  color: var(--codesema-ink);
+}
+
+.sr-tour-mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--codesema-accent);
+  color: #fff;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sr-tour-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--codesema-line);
+  background: var(--codesema-panel);
+  color: var(--codesema-ink-2);
+  font-size: 15px;
+  font-family: inherit;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: border-color 0.1s ease;
+}
+
+.sr-tour-btn:hover:not(:disabled) {
+  border-color: var(--codesema-ink-3);
+}
+
+.sr-tour-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sr-tour-btn--done {
+  border-color: var(--codesema-risk-low);
+  color: var(--codesema-risk-low);
+}
+
+.sr-tour-count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--codesema-ink);
+  min-width: 52px;
+  text-align: center;
+}
+
+.sr-tour-total {
+  color: var(--codesema-ink-3);
+  font-weight: 400;
 }
 
 @media (max-width: 900px) {
