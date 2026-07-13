@@ -7,6 +7,8 @@ export type SelectOption<T> = {
   label: string
   value: T
   hint?: string
+  /** Render a blank line above this option (visually detaches back/quit entries). */
+  separatorBefore?: boolean
 }
 
 export function isInteractive(): boolean {
@@ -78,22 +80,25 @@ export async function select<T>(opts: {
         : `  ${faint(t('tui.typeToFilter'))}`
       : ''
     lines.push(`  ${color('?', ACCENT)} ${opts.title}${filterPart}`)
+    // The question stands out: a blank line below it, answers indented deeper.
+    lines.push('')
 
     if (list.length === 0) {
-      lines.push(`    ${faint(t('tui.noMatch'))}`)
+      lines.push(`        ${faint(t('tui.noMatch'))}`)
     } else {
       const start = Math.min(Math.max(0, cursor - MAX_VISIBLE + 2), Math.max(0, list.length - MAX_VISIBLE))
       const visible = list.slice(start, start + MAX_VISIBLE)
-      if (start > 0) lines.push(`    ${faint(t('tui.moreUp', { n: start }))}`)
+      if (start > 0) lines.push(`        ${faint(t('tui.moreUp', { n: start }))}`)
       visible.forEach((option, i) => {
         const index = start + i
         const active = index === cursor
         const label = truncate(option.label, Math.floor(width() * 0.5))
         const hint = option.hint ? `  ${faint(truncate(option.hint, Math.floor(width() * 0.35)))}` : ''
-        lines.push(active ? `  ${color('❯', ACCENT)} ${color(label, ACCENT)}${hint}` : `    ${label}${hint}`)
+        if (option.separatorBefore && lines.at(-1) !== '') lines.push('')
+        lines.push(active ? `      ${color('❯', ACCENT)} ${color(label, ACCENT)}${hint}` : `        ${label}${hint}`)
       })
       const rest = list.length - start - visible.length
-      if (rest > 0) lines.push(`    ${faint(t('tui.moreDown', { n: rest }))}`)
+      if (rest > 0) lines.push(`        ${faint(t('tui.moreDown', { n: rest }))}`)
     }
     lines.push(`  ${faint(opts.filter ? t('tui.keysWithFilter') : t('tui.keys'))}`)
 

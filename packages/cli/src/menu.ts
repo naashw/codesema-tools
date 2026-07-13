@@ -119,7 +119,12 @@ async function runCloudMenu(cwd: string, actions: MenuActions): Promise<void> {
     const items = buildCloudMenuItems(context)
     const picked = await select<CloudItemId>({
       title: t('menu.cloudTitle'),
-      options: items.map((item) => ({ label: item.label, hint: item.hint, value: item.id })),
+      options: items.map((item) => ({
+        label: item.label,
+        hint: item.hint,
+        value: item.id,
+        separatorBefore: item.id === 'back',
+      })),
       summary: false,
     })
     if (picked === null || picked === 'back') return
@@ -149,7 +154,12 @@ export async function runMenu(opts: { cwd: string }): Promise<void> {
     const items = buildMenuItems(context)
     const picked = await select<MenuItemId>({
       title: t('menu.title'),
-      options: items.map((item) => ({ label: item.label, hint: item.hint, value: item.id })),
+      options: items.map((item) => ({
+        label: item.label,
+        hint: item.hint,
+        value: item.id,
+        separatorBefore: item.id === 'quit',
+      })),
       summary: false,
     })
     if (picked === null || picked === 'quit') return

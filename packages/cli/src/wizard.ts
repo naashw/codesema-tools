@@ -262,7 +262,13 @@ export async function configCommand(repoRoot: string | null): Promise<void> {
     console.log('')
     const picked = await select<ConfigEntryId>({
       title: t('config.menuTitle'),
-      options: entries.map((entry) => ({ label: entry.label, hint: entry.hint, value: entry.id })),
+      options: entries.map((entry) => ({
+        label: entry.label,
+        hint: entry.hint,
+        value: entry.id,
+        separatorBefore: entry.id === 'back',
+      })),
+      summary: false,
     })
     if (picked === null || picked === 'back') return
 
