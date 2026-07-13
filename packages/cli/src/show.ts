@@ -1,4 +1,4 @@
-import { loadConfig } from './config.js'
+import { isRepoAgentTrusted, loadConfig, loadRepoConfig } from './config.js'
 import { createFixRunner, DEFAULT_TIMEOUT_S } from './fix.js'
 import { repoRoot } from './git.js'
 import { t, uiLocale } from './i18n.js'
@@ -24,14 +24,21 @@ export async function show(opts: { review?: string; port?: number; open: boolean
   const config = loadConfig(cwd)
   const [detected] = detectAgents(cwd)
   const agentCommand = config.agent ?? (detected ? defaultCommand(detected) : undefined)
-  const fixRunner = agentCommand
-    ? createFixRunner({
-        getRecord: () => session.record(),
-        cwd,
-        command: agentCommand,
-        timeoutMs: (config.timeout ?? DEFAULT_TIMEOUT_S) * 1000,
-      })
-    : undefined
+  // A repo-provided agent command needs the same TOFU approval as in `review`;
+  // show never prompts, so an untrusted one simply disables the fix button.
+  const repoAgent = loadRepoConfig(cwd).agent
+  const untrustedRepoAgent = Boolean(
+    agentCommand && repoAgent === agentCommand && !isRepoAgentTrusted(cwd, agentCommand),
+  )
+  const fixRunner =
+    agentCommand && !untrustedRepoAgent
+      ? createFixRunner({
+          getRecord: () => session.record(),
+          cwd,
+          command: agentCommand,
+          timeoutMs: (config.timeout ?? DEFAULT_TIMEOUT_S) * 1000,
+        })
+      : undefined
   const { url } = await startServer(session, { port: opts.port ?? config.port, locale: uiLocale(), fixRunner })
   console.log('')
   console.log(`codesema — ${record.meta.branch} → ${record.meta.target}`)
