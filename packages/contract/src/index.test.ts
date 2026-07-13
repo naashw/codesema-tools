@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import { sanitizeFindings, sanitizeNarrative, sanitizeRecord, sanitizeReview } from './index.js'
+import {
+  detectDiffSecrets,
+  reviewRecordSchema,
+  sanitizeFindings,
+  sanitizeNarrative,
+  sanitizeRecord,
+  sanitizeReview,
+} from './index.js'
 
 describe('sanitizeReview', () => {
   test('empty input: safe defaults', () => {
@@ -142,5 +149,73 @@ describe('sanitizeRecord', () => {
     expect(record?.commits).toEqual(['a', 'b'])
     expect(record?.diff).toBe('')
     expect(record?.review.verdict).toBe('approve')
+  })
+})
+
+function diffFor(path: string, added: string[] = []): string {
+  const body = added.map((l) => `+${l}`).join('\n')
+  return `diff --git a/${path} b/${path}\nindex 1..2 100644\n--- a/${path}\n+++ b/${path}\n@@ -0,0 +1 @@\n${body}\n`
+}
+
+describe('detectDiffSecrets', () => {
+  test('non-string or empty input: no matches', () => {
+    expect(detectDiffSecrets('')).toEqual([])
+    expect(detectDiffSecrets(undefined as unknown as string)).toEqual([])
+  })
+
+  test('a clean diff has no matches', () => {
+    expect(detectDiffSecrets(diffFor('src/app.ts', ['const answer = 42']))).toEqual([])
+  })
+
+  test('sensitive filenames are flagged, placeholders are not', () => {
+    expect(detectDiffSecrets(diffFor('.env', ['A=1']))).toContainEqual({ file: '.env', reason: 'filename', detail: '.env' })
+    expect(detectDiffSecrets(diffFor('config/db.pem', ['x']))[0]?.reason).toBe('filename')
+    expect(detectDiffSecrets(diffFor('service/id_rsa', ['x']))[0]?.reason).toBe('filename')
+    expect(detectDiffSecrets(diffFor('.env.local', ['A=1'])).some((m) => m.reason === 'filename')).toBe(true)
+    expect(detectDiffSecrets(diffFor('.env.example', ['A=1']))).toEqual([])
+  })
+
+  test('credentials in content are flagged on added and removed lines', () => {
+    const added = detectDiffSecrets(diffFor('src/app.ts', ['const k = "AKIAIOSFODNN7EXAMPLE"']))
+    expect(added).toContainEqual({ file: 'src/app.ts', reason: 'content', detail: 'an AWS access key id' })
+    const removedSecret =
+      'diff --git a/src/app.ts b/src/app.ts\n--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1 +1 @@\n-const k = "sk-ant-0123456789ABCDEFGHIJ"\n+const k = readEnv()\n'
+    expect(detectDiffSecrets(removedSecret)).toContainEqual({
+      file: 'src/app.ts',
+      reason: 'content',
+      detail: 'an Anthropic API key',
+    })
+  })
+
+  test('duplicate hits for the same file, reason and detail are collapsed', () => {
+    const diff = diffFor('src/app.ts', ['a = "AKIAIOSFODNN7EXAMPLE"', 'b = "AKIAIOSFODNN7EXAMPLE"'])
+    expect(detectDiffSecrets(diff)).toHaveLength(1)
+  })
+})
+
+describe('reviewRecordSchema', () => {
+  test('declares a draft 2020-12 schema with an id', () => {
+    expect(reviewRecordSchema.$schema).toBe('https://json-schema.org/draft/2020-12/schema')
+    expect(reviewRecordSchema.$id).toContain('review-record')
+  })
+
+  test('every $ref resolves to a defined $def', () => {
+    const refs: string[] = []
+    const walk = (node: unknown): void => {
+      if (!node || typeof node !== 'object') return
+      for (const [key, value] of Object.entries(node)) {
+        if (key === '$ref' && typeof value === 'string') refs.push(value)
+        else walk(value)
+      }
+    }
+    walk(reviewRecordSchema)
+    const defs = new Set(Object.keys(reviewRecordSchema.$defs))
+    expect(refs.length).toBeGreaterThan(0)
+    for (const ref of refs) expect(defs.has(ref.replace('#/$defs/', ''))).toBe(true)
+  })
+
+  test('top-level required keys all exist in properties', () => {
+    const props = new Set(Object.keys(reviewRecordSchema.properties))
+    for (const key of reviewRecordSchema.required) expect(props.has(key)).toBe(true)
   })
 })

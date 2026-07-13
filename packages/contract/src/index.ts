@@ -261,3 +261,212 @@ export function sanitizeRecord(raw: unknown): ReviewRecord | null {
   const diff = typeof r.diff === 'string' ? r.diff : ''
   return { version: 1, meta, commits, diff, review: sanitizeReview(r.review) }
 }
+
+export type SecretMatchReason = 'filename' | 'content'
+export type SecretMatch = { file: string; reason: SecretMatchReason; detail: string }
+
+const SENSITIVE_BASENAMES = new Set([
+  '.npmrc',
+  '.netrc',
+  '.pgpass',
+  '.htpasswd',
+  'credentials',
+  'id_rsa',
+  'id_dsa',
+  'id_ecdsa',
+  'id_ed25519',
+])
+const SENSITIVE_EXTENSIONS = new Set(['pem', 'key', 'p12', 'pfx', 'keystore', 'jks'])
+// Placeholder dotenv files carry no real values and are meant to be committed.
+const DOTENV_ALLOWED_SUFFIXES = new Set(['example', 'sample', 'template', 'dist', 'defaults'])
+
+const CONTENT_PATTERNS: readonly { label: string; re: RegExp }[] = [
+  { label: 'a private key', re: /-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----/ },
+  { label: 'an AWS access key id', re: /\bAKIA[0-9A-Z]{16}\b/ },
+  { label: 'a GitHub token', re: /\bgh[posru]_[A-Za-z0-9]{36,}\b/ },
+  { label: 'a Slack token', re: /\bxox[baprs]-[A-Za-z0-9-]{10,}/ },
+  { label: 'a Google API key', re: /\bAIza[0-9A-Za-z_-]{35}\b/ },
+  { label: 'a Stripe secret key', re: /\b(?:sk|rk)_live_[0-9A-Za-z]{16,}\b/ },
+  { label: 'an Anthropic API key', re: /\bsk-ant-[A-Za-z0-9_-]{20,}/ },
+  { label: 'an OpenAI API key', re: /\bsk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}/ },
+  { label: 'an OpenAI API key', re: /\bsk-[A-Za-z0-9]{40,}\b/ },
+]
+
+function sensitiveFilename(path: string): boolean {
+  const base = (path.split('/').pop() ?? '').toLowerCase()
+  if (!base) return false
+  if (SENSITIVE_BASENAMES.has(base)) return true
+  if (base === '.env') return true
+  if (base.startsWith('.env.')) return !DOTENV_ALLOWED_SUFFIXES.has(base.slice(5))
+  const dot = base.lastIndexOf('.')
+  return dot > 0 && SENSITIVE_EXTENSIONS.has(base.slice(dot + 1))
+}
+
+function gitHeaderNewPath(header: string): string {
+  const rest = header.slice('diff --git '.length)
+  const marker = rest.indexOf(' b/')
+  return marker >= 0 ? rest.slice(marker + 3) : ''
+}
+
+function markerLinePath(line: string): string {
+  const raw = line.slice(4).replace(/\t.*$/, '').trim()
+  if (raw === '/dev/null') return ''
+  return raw.startsWith('a/') || raw.startsWith('b/') ? raw.slice(2) : raw
+}
+
+/**
+ * Scans a unified diff for material that looks like a committed secret, by file
+ * name and by content. Content lines are checked on both sides of the diff: a
+ * removed secret still appears in the payload. Never throws; the caller decides
+ * whether to hold the diff back.
+ */
+export function detectDiffSecrets(diff: string): SecretMatch[] {
+  if (typeof diff !== 'string' || !diff) return []
+  const matches: SecretMatch[] = []
+  const seen = new Set<string>()
+  const add = (file: string, reason: SecretMatchReason, detail: string): void => {
+    const key = `${file}\0${reason}\0${detail}`
+    if (seen.has(key)) return
+    seen.add(key)
+    matches.push({ file, reason, detail })
+  }
+  let currentFile = ''
+  for (const line of diff.split('\n')) {
+    if (line.startsWith('diff --git ')) {
+      currentFile = gitHeaderNewPath(line)
+      if (currentFile && sensitiveFilename(currentFile)) add(currentFile, 'filename', currentFile)
+      continue
+    }
+    if (line.startsWith('+++ ') || line.startsWith('--- ')) {
+      const path = markerLinePath(line)
+      if (path) {
+        if (!currentFile) currentFile = path
+        if (sensitiveFilename(path)) add(path, 'filename', path)
+      }
+      continue
+    }
+    const isAdded = line.startsWith('+') && !line.startsWith('+++')
+    const isRemoved = line.startsWith('-') && !line.startsWith('---')
+    if (!isAdded && !isRemoved) continue
+    const content = line.slice(1)
+    for (const { label, re } of CONTENT_PATTERNS) {
+      if (re.test(content)) add(currentFile || '(unknown file)', 'content', label)
+    }
+  }
+  return matches
+}
+
+const RISK_ENUM = { enum: ['high', 'medium', 'low'] } as const
+
+/** JSON Schema (draft 2020-12) for a ReviewRecord, for consumers validating synced reviews. */
+export const reviewRecordSchema = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  $id: 'https://codesema.com/schemas/review-record.json',
+  title: 'Codesema review record',
+  type: 'object',
+  additionalProperties: false,
+  required: ['version', 'meta', 'commits', 'diff', 'review'],
+  properties: {
+    version: { const: 1 },
+    meta: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['title', 'branch', 'target', 'merge_base', 'repo_root', 'created_at'],
+      properties: {
+        title: { type: 'string' },
+        branch: { type: 'string' },
+        target: { type: 'string' },
+        merge_base: { type: 'string' },
+        head_sha: { type: 'string' },
+        repo_root: { type: 'string' },
+        created_at: { type: 'string' },
+      },
+    },
+    commits: { type: 'array', items: { type: 'string' } },
+    diff: { type: 'string' },
+    review: { $ref: '#/$defs/review' },
+  },
+  $defs: {
+    review: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['verdict', 'summary', 'findings', 'narrative'],
+      properties: {
+        verdict: { enum: ['approve', 'request_changes', 'comment'] },
+        summary: { type: 'string' },
+        findings: { type: 'array', items: { $ref: '#/$defs/finding' } },
+        narrative: { anyOf: [{ type: 'null' }, { $ref: '#/$defs/narrative' }] },
+      },
+    },
+    finding: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['file', 'severity', 'message'],
+      properties: {
+        file: { type: 'string' },
+        line: { type: 'integer', minimum: 1 },
+        endLine: { type: 'integer', minimum: 1 },
+        severity: { enum: ['critical', 'major', 'minor', 'info'] },
+        kind: { enum: ['security', 'perf', 'convention', 'design', 'praise', 'why'] },
+        title: { type: 'string' },
+        message: { type: 'string' },
+        suggestion: { type: 'string' },
+      },
+    },
+    narrative: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['intent', 'confidence', 'steps', 'review_first'],
+      properties: {
+        intent: { type: 'string' },
+        confidence: RISK_ENUM,
+        prologue: { $ref: '#/$defs/prologue' },
+        steps: { type: 'array', items: { $ref: '#/$defs/step' } },
+        review_first: { type: 'array', items: { $ref: '#/$defs/reviewFirstItem' } },
+      },
+    },
+    prologue: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['why', 'what', 'key_changes'],
+      properties: {
+        why: { type: 'string' },
+        what: { type: 'string' },
+        key_changes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['title', 'detail'],
+            properties: { title: { type: 'string' }, detail: { type: 'string' } },
+          },
+        },
+      },
+    },
+    step: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['title', 'rationale', 'files', 'finding_refs'],
+      properties: {
+        title: { type: 'string' },
+        rationale: { type: 'string' },
+        files: { type: 'array', items: { type: 'string' } },
+        finding_refs: { type: 'array', items: { type: 'integer', minimum: 0 } },
+        risk: RISK_ENUM,
+        take: { type: 'string' },
+        check: { type: ['string', 'null'] },
+      },
+    },
+    reviewFirstItem: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['point', 'risk', 'step_ref', 'file'],
+      properties: {
+        point: { type: 'string' },
+        risk: RISK_ENUM,
+        step_ref: { type: ['integer', 'null'], minimum: 0 },
+        file: { type: ['string', 'null'] },
+      },
+    },
+  },
+} as const
