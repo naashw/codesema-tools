@@ -41,6 +41,14 @@ Re-running on the same branch reviews **incrementally**: the agent gets the prev
 2. **Your agent** reviews the diff like a senior reviewer and writes a structured review: prologue, ordered steps with risk/take/check, typed findings (security/perf/convention/design/praise/why), and what to review first.
 3. **The local web UI** shows the review in progress, then switches to the full experience: guided step-by-step reading, split/unified diff with inline notes, file tree, read/checked progress.
 
+## Privacy
+
+Everything runs on your machine. The MR diff, the prompt and the review are written under `.codesema/` and never leave your computer: the review itself is produced by the agent CLI you run locally, not by a codesema.com service.
+
+The one exception is `codesema sync`. That command, and only that command, uploads the review record (**including the diff**) to a codesema.com workspace, and only after you confirm on first run. Your absolute local repo path is stripped from the payload; only the review, diff, commit subjects and the origin remote URL are sent. `codesema sync delete` erases everything.
+
+Before uploading, sync scans the diff for anything that looks like a committed secret (dotenv files, private keys, and AWS/GitHub/Slack/Google/Stripe/OpenAI/Anthropic credentials) and refuses to send it. Fix the diff, or pass `--force` once you have checked.
+
 ## Requirements
 
 - Node.js ≥ 20 and `git`
@@ -77,6 +85,7 @@ An `agent` command coming from a repo's `.codesema/config.json` runs on your mac
 ```bash
 codesema                       # interactive terminal: opens a navigable menu (review, show, sync, link, config)
 codesema review --branch feat/x --target develop   # non-interactive, CI-friendly
+codesema review --fail-on major   # CI gate: exit 2 if a finding is >= major (or use 'request_changes')
 codesema config                # change language / agent / model / effort
 codesema prep                  # only write .codesema/input.json for your own agent flow
 codesema show                  # only display .codesema/review.json (or the last archived review)
@@ -114,6 +123,35 @@ Then, in any repo, on your feature branch, ask your agent: `/codesema`. It uses 
 - `no supported agent CLI found`: install `claude`, or pick "Custom command" in `codesema config` (the command receives the prompt on stdin and must print the review JSON on stdout).
 - Port busy: codesema scans 20 ports from the preferred one (default 4400); pick another base with `--port <n>`.
 - The web page says the review failed: the terminal has the full error; the server stays up so you can read both.
+
+## Environment variables
+
+| Variable                   | Effect                                                                            |
+| -------------------------- | --------------------------------------------------------------------------------- |
+| `CODESEMA_CONFIG_DIR`      | Override the global config directory (default `~/.config/codesema`).               |
+| `CODESEMA_NO_UPDATE_CHECK` | Set to `1` to skip the startup npm version check (also skipped when not a TTY).    |
+| `CODESEMA_SYNC_URL`        | Point `sync`/`link` at a different codesema.com host (self-hosted or staging).     |
+
+## Files
+
+| Path                              | Contents                                                                     |
+| --------------------------------- | ---------------------------------------------------------------------------- |
+| `~/.config/codesema/config.json`  | Global config (language, agent, model, effort, sync credentials), mode `0600`. |
+| `.codesema/config.json`           | Repo config, overrides the global one.                                       |
+| `.codesema/input.json`            | The prepared MR diff handed to the agent (`prep`).                           |
+| `.codesema/review.json`           | The latest review written by the agent.                                     |
+| `.codesema/reviews/`              | Archived reviews (5 kept per branch, used for incremental re-review).         |
+| `.codesema/PROMPT.md`             | Your team's extra review instructions, merged into the prompt.               |
+| `.codesema-ignore`                | Glob patterns excluded from the diff.                                        |
+
+## Exit codes
+
+| Code  | Meaning                                                                                        |
+| ----- | ---------------------------------------------------------------------------------------------- |
+| `0`   | Success (review completed; with `--fail-on`, nothing tripped the gate).                        |
+| `1`   | Error (bad invocation, agent failure, unusable output, or a blocked secret sync).              |
+| `2`   | `review --fail-on <level>` gate tripped (a finding at or above the level, or changes requested). |
+| `130` | Interrupted with Ctrl-C.                                                                        |
 
 ## Development
 

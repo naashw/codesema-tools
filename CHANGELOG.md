@@ -11,11 +11,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 - Run fixes: a button in focus mode asks the configured agent to apply the selected findings to the working tree (headless run with edit permissions, per-session token on the local endpoint, warning when the branch moved since the review). `codesema show` exposes it too when an agent is available.
 - Guided reading: a floating Next/Previous pill walks the agent's notes one by one across steps, scrolling to each annotation in the diff and marking steps as read along the way.
 - Step dots in the MR rail are colored by what the agent found there: red for critical/major findings, orange for minor ones, green when clean (falls back to the step risk); the read checkmark stays.
+- `codesema review --fail-on <critical|major|minor|info|request_changes>`: a CI gate that runs the review once, stops the local server so the command exits, and returns exit code `2` when the review has a finding at or above the given severity, or requested changes. Without the flag, `review` keeps its server up for the live UI as before.
+- `@codesema/contract` (0.2.0) exports a JSON Schema for the review record (`reviewRecordSchema`) and a diff secret scanner (`detectDiffSecrets`), both usable by codesema.com.
 
 ### Changed
 
 - "Copy for Claude Code" is now "Copy for agent" (the CLI drives Claude, Codex, Gemini or a custom agent).
 - `codesema sync delete` run directly from the CLI now asks the same confirmation as the menu when the terminal is interactive.
+- README: added Privacy, Environment variables, Files and Exit codes sections.
 
 ### Fixed
 
@@ -30,6 +33,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 - Synced reviews no longer embed the absolute local repository path (`repo_root` is blanked before upload).
 - The global config file is written with owner-only permissions (0600) since it can hold the sync workspace secret.
 - Sync fields (`syncUrl`, `syncWorkspaceId`, `syncSecret`) in a repo's `.codesema/config.json` are ignored: only the global config decides where reviews are sent.
+- `codesema sync` scans the diff for material that looks like a committed secret (dotenv files, private keys, and AWS/GitHub/Slack/Google/Stripe/OpenAI/Anthropic credentials, on both added and removed lines) and refuses to upload it; pass `--force` to send anyway.
 
 ## [0.6.0] - 2026-07-13
 
