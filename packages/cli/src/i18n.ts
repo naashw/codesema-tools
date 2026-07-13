@@ -6,11 +6,12 @@ const en = {
   'cli.help': `codesema — local merge request review, step by step
 
 Usage:
-  codesema                            Interactive review: pick a local branch, the web UI opens
-                                      immediately and fills in live while your AI agent reviews.
-                                      First run only: a short wizard picks the language, agent,
-                                      model and effort (saved globally — change it with
-                                      \`codesema config\`)
+  codesema                            Opens an interactive menu (review, show, sync, link, config) in
+                                      an interactive terminal; behaves like \`review\` otherwise. Pick
+                                      a local branch, the web UI opens immediately and fills in live
+                                      while your AI agent reviews. First run only: a short wizard picks
+                                      the language, agent, model and effort (saved globally — change it
+                                      with \`codesema config\`)
   codesema review [--branch <name>] [--target <branch>] [--agent <cmd>] [--full] [--no-open]
                                       Same flow; --branch skips the branch picker (also skipped
                                       when stdin is not a terminal, e.g. CI). Re-runs on the same
@@ -230,6 +231,27 @@ version exists (nothing is sent). Set CODESEMA_NO_UPDATE_CHECK=1 to disable.
   'sync.nonInteractiveSetup': 'sync is not set up: run `codesema sync` once in an interactive terminal to opt in',
   'sync.unknownAction': 'unknown sync action: {action} (expected `codesema sync` or `codesema sync delete`)',
   'sync.unreachable': 'could not reach {url}: check your connection or CODESEMA_SYNC_URL',
+
+  'menu.title': 'What do you want to do?',
+  'menu.review': 'Review a branch',
+  'menu.reviewHint': 'pick a branch and start a review',
+  'menu.show': 'Show last review',
+  'menu.showHint': 'open the last review in the local web UI',
+  'menu.sync': 'Sync',
+  'menu.syncHintPush': 'push the latest review',
+  'menu.syncHintSetup': 'not set up yet',
+  'menu.link': 'Link account',
+  'menu.linkHint': 'attach this workspace to your codesema.com account',
+  'menu.linkPrompt': 'Pairing code',
+  'menu.syncDelete': 'Delete synced data',
+  'menu.syncDeleteHint': 'erase everything from codesema.com',
+  'menu.syncDeleteConfirm': 'Delete all synced data?',
+  'menu.syncDeleteConfirmCancel': 'Cancel',
+  'menu.syncDeleteConfirmDelete': 'Delete everything',
+  'menu.syncDeleteConfirmDeleteHint': 'cannot be undone',
+  'menu.config': 'Config',
+  'menu.configHint': 'change language, agent, model and effort',
+  'menu.quit': 'Quit',
 }
 
 export type MessageKey = keyof typeof en
@@ -238,12 +260,13 @@ const fr: Record<MessageKey, string> = {
   'cli.help': `codesema : revue de merge request locale, étape par étape
 
 Usage :
-  codesema                            Revue interactive : choisissez une branche locale, l'UI web
-                                      s'ouvre immédiatement et se remplit en direct pendant que
-                                      votre agent IA travaille. Premier lancement uniquement : un
-                                      court assistant choisit la langue, l'agent, le modèle et
-                                      l'effort (sauvegardés globalement, modifiables avec
-                                      \`codesema config\`)
+  codesema                            Ouvre un menu interactif (review, show, sync, link, config)
+                                      dans un terminal interactif ; se comporte comme \`review\` sinon.
+                                      Choisissez une branche locale, l'UI web s'ouvre immédiatement et
+                                      se remplit en direct pendant que votre agent IA travaille. Premier
+                                      lancement uniquement : un court assistant choisit la langue,
+                                      l'agent, le modèle et l'effort (sauvegardés globalement,
+                                      modifiables avec \`codesema config\`)
   codesema review [--branch <nom>] [--target <branche>] [--agent <cmd>] [--full] [--no-open]
                                       Même flux ; --branch saute le sélecteur de branche (sauté
                                       aussi quand stdin n'est pas un terminal, ex. CI). Relancer
@@ -463,6 +486,27 @@ version existe (rien n'est envoyé). CODESEMA_NO_UPDATE_CHECK=1 pour désactiver
   'sync.nonInteractiveSetup': 'sync non configuré : lancez `codesema sync` une fois dans un terminal interactif pour l\'activer',
   'sync.unknownAction': 'action sync inconnue : {action} (attendu `codesema sync` ou `codesema sync delete`)',
   'sync.unreachable': 'impossible de joindre {url} : vérifiez votre connexion ou CODESEMA_SYNC_URL',
+
+  'menu.title': 'Que voulez-vous faire ?',
+  'menu.review': 'Passer une branche en revue',
+  'menu.reviewHint': 'choisir une branche et démarrer une revue',
+  'menu.show': 'Afficher la dernière revue',
+  'menu.showHint': 'ouvrir la dernière revue dans l\'UI web locale',
+  'menu.sync': 'Synchroniser',
+  'menu.syncHintPush': 'pousser la dernière revue',
+  'menu.syncHintSetup': 'pas encore configuré',
+  'menu.link': 'Rattacher le compte',
+  'menu.linkHint': 'rattacher ce workspace à votre compte codesema.com',
+  'menu.linkPrompt': 'Code d\'appairage',
+  'menu.syncDelete': 'Supprimer les données synchronisées',
+  'menu.syncDeleteHint': 'efface tout sur codesema.com',
+  'menu.syncDeleteConfirm': 'Supprimer toutes les données synchronisées ?',
+  'menu.syncDeleteConfirmCancel': 'Annuler',
+  'menu.syncDeleteConfirmDelete': 'Tout supprimer',
+  'menu.syncDeleteConfirmDeleteHint': 'irréversible',
+  'menu.config': 'Configuration',
+  'menu.configHint': 'changer la langue, l\'agent, le modèle et l\'effort',
+  'menu.quit': 'Quitter',
 }
 
 const CATALOGS = { en, fr } satisfies Record<string, Record<MessageKey, string>>

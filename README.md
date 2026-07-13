@@ -75,7 +75,7 @@ An `agent` command coming from a repo's `.codesema/config.json` runs on your mac
 ## Commands
 
 ```bash
-codesema                       # interactive review (default command)
+codesema                       # interactive terminal: opens a navigable menu (review, show, sync, link, config)
 codesema review --branch feat/x --target develop   # non-interactive, CI-friendly
 codesema config                # change language / agent / model / effort
 codesema prep                  # only write .codesema/input.json for your own agent flow

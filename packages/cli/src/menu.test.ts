@@ -1,0 +1,95 @@
+import { afterEach, describe, expect, test } from 'bun:test'
+import { setLanguage, t } from './i18n.js'
+import { buildMenuItems, dispatchMenuAction, type MenuActions, type MenuItemId } from './menu.js'
+
+afterEach(() => setLanguage(null))
+
+describe('buildMenuItems', () => {
+  test('full menu inside a repo with sync credentials', () => {
+    const items = buildMenuItems({ hasSyncCredentials: true, inRepo: true })
+    expect(items.map((item) => item.id)).toEqual(['review', 'show', 'sync', 'link', 'syncDelete', 'config', 'quit'])
+  })
+
+  test('link and syncDelete are hidden without sync credentials', () => {
+    const items = buildMenuItems({ hasSyncCredentials: false, inRepo: true })
+    expect(items.map((item) => item.id)).toEqual(['review', 'show', 'sync', 'config', 'quit'])
+  })
+
+  test('review, show and sync are hidden outside a repo', () => {
+    const items = buildMenuItems({ hasSyncCredentials: false, inRepo: false })
+    expect(items.map((item) => item.id)).toEqual(['config', 'quit'])
+  })
+
+  test('link and syncDelete are available outside a repo when sync credentials exist, since sync is workspace-wide, not repo-scoped', () => {
+    const items = buildMenuItems({ hasSyncCredentials: true, inRepo: false })
+    expect(items.map((item) => item.id)).toEqual(['link', 'syncDelete', 'config', 'quit'])
+  })
+
+  test('quit is always present and always last', () => {
+    for (const hasSyncCredentials of [true, false]) {
+      for (const inRepo of [true, false]) {
+        const items = buildMenuItems({ hasSyncCredentials, inRepo })
+        expect(items.length).toBeGreaterThan(0)
+        expect(items.at(-1)?.id).toBe('quit')
+        expect(items.filter((item) => item.id === 'quit').length).toBe(1)
+      }
+    }
+  })
+
+  test('the sync hint depends on whether credentials exist', () => {
+    const withCredentials = buildMenuItems({ hasSyncCredentials: true, inRepo: true }).find((i) => i.id === 'sync')
+    const withoutCredentials = buildMenuItems({ hasSyncCredentials: false, inRepo: true }).find((i) => i.id === 'sync')
+    expect(withCredentials?.hint).toBe(t('menu.syncHintPush'))
+    expect(withoutCredentials?.hint).toBe(t('menu.syncHintSetup'))
+    expect(withCredentials?.hint).not.toBe(withoutCredentials?.hint)
+  })
+
+  test('labels and hints follow the active i18n catalog', () => {
+    setLanguage('fr')
+    const items = buildMenuItems({ hasSyncCredentials: true, inRepo: true })
+    expect(items.find((i) => i.id === 'review')?.label).toBe(t('menu.review'))
+    expect(items.find((i) => i.id === 'config')?.hint).toBe(t('menu.configHint'))
+  })
+})
+
+describe('dispatchMenuAction', () => {
+  function spyActions(): { actions: MenuActions; calls: MenuItemId[] } {
+    const calls: MenuItemId[] = []
+    const actions: MenuActions = {
+      review: async () => {
+        calls.push('review')
+      },
+      show: async () => {
+        calls.push('show')
+      },
+      sync: async () => {
+        calls.push('sync')
+      },
+      link: async () => {
+        calls.push('link')
+      },
+      syncDelete: async () => {
+        calls.push('syncDelete')
+      },
+      config: async () => {
+        calls.push('config')
+      },
+    }
+    return { actions, calls }
+  }
+
+  test('routes each id to its matching action and none other', async () => {
+    const ids: Exclude<MenuItemId, 'quit'>[] = ['review', 'show', 'sync', 'link', 'syncDelete', 'config']
+    for (const id of ids) {
+      const { actions, calls } = spyActions()
+      await dispatchMenuAction(id, actions)
+      expect(calls).toEqual([id])
+    }
+  })
+
+  test('propagates a rejection from the underlying action', async () => {
+    const { actions } = spyActions()
+    const failing: MenuActions = { ...actions, link: async () => Promise.reject(new Error('bad pairing code')) }
+    await expect(dispatchMenuAction('link', failing)).rejects.toThrow('bad pairing code')
+  })
+})

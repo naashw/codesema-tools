@@ -11,6 +11,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 - `codesema sync`: push the latest review to a free anonymous codesema.com workspace (opt-in, explicit confirmation on first run).
 - `codesema sync delete`: erase all synced data and local credentials.
 - `codesema link <code>`: attach the workspace to a codesema.com account via a pairing code.
+- Interactive menu: running `codesema` with no arguments now opens a navigable menu (review, show, sync, link, config) in interactive terminals.
 
 ## [0.5.0] - unreleased
 

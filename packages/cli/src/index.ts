@@ -4,10 +4,12 @@ import { loadConfig } from './config.js'
 import { setLanguage, t } from './i18n.js'
 import { exportCommand } from './export.js'
 import { tryGit } from './git.js'
+import { runMenu } from './menu.js'
 import { prep } from './prep.js'
 import { review } from './review.js'
 import { show } from './show.js'
 import { linkCommand, syncCommand } from './sync.js'
+import { isInteractive } from './tui.js'
 import { VERSION } from './version.js'
 import { configCommand } from './wizard.js'
 
@@ -46,6 +48,10 @@ async function main(): Promise<void> {
   setLanguage(loadConfig(repoRoot).language)
   if (values.help) {
     console.log(t('cli.help'))
+    return
+  }
+  if (positionals[0] === undefined && isInteractive()) {
+    await runMenu({ cwd: process.cwd() })
     return
   }
   const command = positionals[0] ?? 'review'
