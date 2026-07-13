@@ -94,6 +94,7 @@ export async function runMenu(opts: { cwd: string }): Promise<void> {
     const hasSyncCredentials = loadSyncCredentials() !== null
     const items = buildMenuItems({ hasSyncCredentials, inRepo })
 
+    console.log('')
     const picked = await select<MenuItemId>({
       title: t('menu.title'),
       options: items.map((item) => ({ label: item.label, hint: item.hint, value: item.id })),
@@ -110,6 +111,5 @@ export async function runMenu(opts: { cwd: string }): Promise<void> {
     } catch (err) {
       console.error(`codesema: ${err instanceof Error ? err.message : String(err)}`)
     }
-    console.log('')
   }
 }

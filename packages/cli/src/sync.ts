@@ -5,7 +5,18 @@ import { repoRoot, tryGit } from './git.js'
 import { t } from './i18n.js'
 import { resolveRecord } from './record.js'
 import { isInteractive, select } from './tui.js'
-import { ACCENT, GREEN, bold, dim, paint } from './ui.js'
+import { GREEN, bold, dim, paint, renderFieldRows, type FieldRow } from './ui.js'
+
+/**
+ * bkctl-style operation result: a blank line, a status line, an indented detail
+ * block. No trailing blank: separation from whatever follows (menu redraw, hint
+ * line, shell prompt) is owned by the caller, so loops never double up.
+ */
+function printOperationResult(statusMessage: string, rows: FieldRow[]): void {
+  console.log('')
+  console.log(`  ${paint('✔', GREEN)} ${statusMessage}`)
+  for (const line of renderFieldRows(rows)) console.log(`  ${line}`)
+}
 
 const DEFAULT_SYNC_URL = 'https://codesema.com'
 
@@ -133,7 +144,7 @@ export async function syncCommand(opts: { action?: string; cwd: string }): Promi
     const creds = loadSyncCredentials()
     if (!creds) throw new Error(t('sync.noCredentials'))
     await deleteWorkspaceData(creds)
-    console.log(`  ${paint('✔', GREEN)} ${t('sync.deleted')}`)
+    printOperationResult(t('sync.deleted'), [])
     return
   }
   if (opts.action !== undefined) {
@@ -149,7 +160,11 @@ export async function syncCommand(opts: { action?: string; cwd: string }): Promi
   const remoteUrl = tryGit(['remote', 'get-url', 'origin'], cwd)
   const result = await pushReview({ record, remoteUrl, repoName: basename(cwd) }, creds)
   const doneKey = result.deduplicated ? 'sync.alreadySynced' : 'sync.pushed'
-  console.log(`  ${paint('✔', GREEN)} ${t(doneKey, { branch: record.meta.branch })}`)
+  printOperationResult(t(doneKey, { branch: record.meta.branch }), [
+    { label: t('field.branch'), value: record.meta.branch },
+    { label: t('field.status'), value: result.deduplicated ? t('sync.statusExisting') : t('sync.statusNew') },
+  ])
+  console.log('')
   console.log(`  ${dim(t('sync.linkHint'))}`)
 }
 
@@ -157,6 +172,6 @@ export async function linkCommand(opts: { code?: string }): Promise<void> {
   if (!opts.code) throw new Error(t('sync.linkUsage'))
   const creds = loadSyncCredentials()
   if (!creds) throw new Error(t('sync.noCredentials'))
-  await linkWorkspace(opts.code, creds)
-  console.log(`  ${paint('✔', GREEN)} ${t('sync.linked', { url: paint(creds.url, ACCENT) })}`)
+  const { tenant_id } = await linkWorkspace(opts.code, creds)
+  printOperationResult(t('sync.linked', { url: creds.url }), [{ label: t('field.account'), value: tenant_id }])
 }

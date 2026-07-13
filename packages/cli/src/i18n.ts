@@ -97,7 +97,6 @@ version exists (nothing is sent). Set CODESEMA_NO_UPDATE_CHECK=1 to disable.
   'review.stillUp': '{url} still up · Ctrl+C to stop',
   'review.unusableOutput': 'unusable agent output',
   'review.ready': 'review ready',
-  'review.archivedAt': 'archived: {path}',
   'review.ctrlc': 'Ctrl+C to stop',
   'review.syncHint': 'codesema sync  saves this review to your codesema.com workspace',
 
@@ -110,8 +109,11 @@ version exists (nothing is sent). Set CODESEMA_NO_UPDATE_CHECK=1 to disable.
   'field.mode': 'mode',
   'field.prompt': 'prompt',
   'field.web': 'web',
+  'field.archived': 'archived',
   'field.verdict': 'verdict',
   'field.findings': 'findings',
+  'field.status': 'status',
+  'field.account': 'account',
 
   'wizard.firstRun': 'First run — pick the agent that will review your code.',
   'wizard.firstRunHint': 'Saved once, for every repo. Change it anytime with `codesema config`.',
@@ -222,6 +224,8 @@ version exists (nothing is sent). Set CODESEMA_NO_UPDATE_CHECK=1 to disable.
   'sync.aborted': 'Sync cancelled: everything stays local.',
   'sync.pushed': 'Review of {branch} synced.',
   'sync.alreadySynced': 'Review of {branch} was already synced (no duplicate created).',
+  'sync.statusNew': 'new',
+  'sync.statusExisting': 'already synced',
   'sync.linkHint':
     'Tip: create an account on codesema.com, generate a pairing code in Settings, then run `codesema link <code>` to see your reviews online.',
   'sync.linked': 'Workspace linked to your account on {url}.',
@@ -352,7 +356,6 @@ version existe (rien n'est envoyé). CODESEMA_NO_UPDATE_CHECK=1 pour désactiver
   'review.stillUp': '{url} toujours actif · Ctrl+C pour arrêter',
   'review.unusableOutput': 'sortie d\'agent inutilisable',
   'review.ready': 'revue prête',
-  'review.archivedAt': 'archivée : {path}',
   'review.ctrlc': 'Ctrl+C pour arrêter',
   'review.syncHint': 'codesema sync  enregistre cette review dans votre workspace codesema.com',
 
@@ -365,8 +368,11 @@ version existe (rien n'est envoyé). CODESEMA_NO_UPDATE_CHECK=1 pour désactiver
   'field.mode': 'mode',
   'field.prompt': 'prompt',
   'field.web': 'web',
+  'field.archived': 'archivée',
   'field.verdict': 'verdict',
   'field.findings': 'notes',
+  'field.status': 'statut',
+  'field.account': 'compte',
 
   'wizard.firstRun': 'Premier lancement : choisissez l\'agent qui fera la revue de votre code.',
   'wizard.firstRunHint': 'Sauvegardé une fois, pour tous les dépôts. Modifiable à tout moment avec `codesema config`.',
@@ -477,6 +483,8 @@ version existe (rien n'est envoyé). CODESEMA_NO_UPDATE_CHECK=1 pour désactiver
   'sync.aborted': 'Sync annulée : tout reste en local.',
   'sync.pushed': 'Review de {branch} synchronisée.',
   'sync.alreadySynced': 'Review de {branch} déjà synchronisée (pas de doublon créé).',
+  'sync.statusNew': 'nouvelle',
+  'sync.statusExisting': 'déjà synchronisée',
   'sync.linkHint':
     'Astuce : créez un compte sur codesema.com, générez un code d\'appairage dans Settings, puis lancez `codesema link <code>` pour retrouver vos reviews en ligne.',
   'sync.linked': 'Workspace rattaché à votre compte sur {url}.',

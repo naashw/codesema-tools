@@ -304,6 +304,24 @@ describe('sync and link commands', () => {
     expect(linked!.body).toEqual({ code: PAIRING_CODE })
   })
 
+  test('linkCommand prints the workspace url once, not duplicated across the status line and a field row', async () => {
+    seedCredentials()
+    const logged: string[] = []
+    const originalLog = console.log
+    console.log = (...args: unknown[]) => {
+      logged.push(args.join(' '))
+    }
+
+    try {
+      await linkCommand({ code: PAIRING_CODE })
+    } finally {
+      console.log = originalLog
+    }
+
+    const occurrences = logged.filter((line) => line.includes(stub.url)).length
+    expect(occurrences).toBe(1)
+  })
+
   test('linkCommand surfaces the server error message for a wrong code', async () => {
     seedCredentials()
 

@@ -1,6 +1,6 @@
 import type { Finding, FindingSeverity, NarrativeRisk, ReviewRecord, Verdict } from './contract.js'
 import { t } from './i18n.js'
-import { ACCENT, AMBER, GRAY, GREEN, RED, bold, dim, fieldLabel, paint } from './ui.js'
+import { ACCENT, AMBER, GRAY, GREEN, RED, bold, dim, paint, renderFieldRows } from './ui.js'
 
 const VERDICT_COLORS: Record<Verdict, number> = {
   approve: GREEN,
@@ -51,16 +51,22 @@ export function formatFindingCounts(findings: Finding[]): string {
 
 export function printReviewSummary(record: ReviewRecord): void {
   const { review } = record
-  console.log('')
-  console.log(`  ${fieldLabel(t('field.verdict'))}${bold(paint(t(`verdict.${review.verdict}`), VERDICT_COLORS[review.verdict]))}`)
-  console.log(`  ${fieldLabel(t('field.findings'))}${formatFindingCounts(review.findings)}`)
+  renderFieldRows([
+    { label: t('field.verdict'), value: bold(paint(t(`verdict.${review.verdict}`), VERDICT_COLORS[review.verdict])) },
+    { label: t('field.findings'), value: formatFindingCounts(review.findings) },
+  ]).forEach((line) => console.log(line))
 
   const hotspots = review.narrative?.review_first ?? []
   if (hotspots.length === 0) return
+  console.log('')
   console.log(`  ${paint(t('summary.checkFirst'), ACCENT)}`)
+
+  const riskColumnWidth = hotspots.reduce((max, item) => Math.max(max, t(`risk.${item.risk}`).length), 0) + 2
+  const fileIndent = ' '.repeat(3 + riskColumnWidth)
   hotspots.forEach((item, index) => {
-    const risk = paint(t(`risk.${item.risk}`).padEnd(6), RISK_COLORS[item.risk])
-    const file = item.file ? `  ${dim(item.file)}` : ''
-    console.log(`    ${dim(`${index + 1}.`)} ${risk} ${truncate(item.point, POINT_MAX)}${file}`)
+    const number = dim(`${index + 1}.`.padEnd(3))
+    const risk = paint(t(`risk.${item.risk}`).padEnd(riskColumnWidth), RISK_COLORS[item.risk])
+    console.log(`    ${number}${risk}${truncate(item.point, POINT_MAX)}`)
+    if (item.file) console.log(`    ${fileIndent}${dim(item.file)}`)
   })
 }

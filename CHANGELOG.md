@@ -13,6 +13,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 - `codesema link <code>`: attach the workspace to a codesema.com account via a pairing code.
 - Interactive menu: running `codesema` with no arguments now opens a navigable menu (review, show, sync, link, config) in interactive terminals.
 
+### Changed
+
+- More readable CLI output: dynamically aligned field blocks, clear section spacing, hotspot files on their own line.
+
 ## [0.5.0] - unreleased
 
 ### Added

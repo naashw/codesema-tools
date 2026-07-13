@@ -16,7 +16,7 @@ import type { LiveSession } from './serve.js'
 import { createSession, startServer } from './serve.js'
 import { printReviewSummary } from './summary.js'
 import { isInteractive, select } from './tui.js'
-import { ACCENT, GREEN, RED, bold, dim, fieldLabel, paint, printBanner, printUpdateNotice, progressLabel, startSpinner, underline } from './ui.js'
+import { ACCENT, GREEN, RED, bold, dim, paint, printBanner, printUpdateNotice, progressLabel, renderFieldRows, startSpinner, underline } from './ui.js'
 import { startUpdateCheck } from './version.js'
 import { AGENT_DEFS, defaultCommand, detectAgents, runOnboarding } from './wizard.js'
 
@@ -264,18 +264,6 @@ export async function review(opts: {
 
   const additions = input.files.reduce((n, f) => n + f.additions, 0)
   const deletions = input.files.reduce((n, f) => n + f.deletions, 0)
-  console.log(`  ${fieldLabel(t('field.branch'))}${bold(input.branch)} ${dim('→')} ${input.target} ${dim(`(${input.target_source})`)}`)
-  console.log(
-    `  ${fieldLabel(t('field.changes'))}${t('review.files', { n: input.files.length })} · ${paint(`+${additions}`, GREEN)} ${paint(`−${deletions}`, RED)} · ${t('review.commits', { n: input.commits.length })}`,
-  )
-  if (incremental) {
-    console.log(
-      `  ${fieldLabel(t('field.mode'))}${t('review.modeIncremental')} ${dim(t('review.modeIncrementalHint', { sha: incremental.sinceSha.slice(0, 8) }))}`,
-    )
-  }
-  if (input.custom_instructions) {
-    console.log(`  ${fieldLabel(t('field.prompt'))}${dim(t('review.customPrompt'))}`)
-  }
 
   const session = createSession()
   session.setAgent(agentCommand)
@@ -290,7 +278,30 @@ export async function review(opts: {
   })
 
   const { url } = await startServer(session, { port: opts.port ?? config.port, locale: uiLocale() })
-  console.log(`  ${fieldLabel(t('field.web'))}${underline(paint(url, ACCENT))} ${dim(t('review.webLiveHint'))}`)
+
+  const headerRows = [
+    {
+      label: t('field.branch'),
+      value: `${bold(input.branch)} ${dim('→')} ${input.target} ${dim(`(${input.target_source})`)}`,
+    },
+    {
+      label: t('field.changes'),
+      value: `${t('review.files', { n: input.files.length })} · ${paint(`+${additions}`, GREEN)} ${paint(`−${deletions}`, RED)} · ${t('review.commits', { n: input.commits.length })}`,
+    },
+  ]
+  if (incremental) {
+    headerRows.push({
+      label: t('field.mode'),
+      value: `${t('review.modeIncremental')} ${dim(t('review.modeIncrementalHint', { sha: incremental.sinceSha.slice(0, 8) }))}`,
+    })
+  }
+  if (input.custom_instructions) {
+    headerRows.push({ label: t('field.prompt'), value: dim(t('review.customPrompt')) })
+  }
+  headerRows.push({ label: t('field.web'), value: `${underline(paint(url, ACCENT))} ${dim(t('review.webLiveHint'))}` })
+
+  console.log('')
+  renderFieldRows(headerRows).forEach((line) => console.log(line))
   console.log('')
   if (opts.open) openBrowser(url)
 
@@ -345,10 +356,14 @@ export async function review(opts: {
 
   const findingsCount = record.review.findings.length
   spinner.stop(`  ${paint('✔', GREEN)} ${t('review.ready')}`)
+  console.log('')
   printReviewSummary(record)
   console.log('')
-  console.log(`  ${fieldLabel(t('field.web'))}${underline(paint(url, ACCENT))}`)
-  console.log(`  ${dim(t('review.archivedAt', { path: savedPath }))}`)
+  renderFieldRows([
+    { label: t('field.web'), value: underline(paint(url, ACCENT)) },
+    { label: t('field.archived'), value: dim(savedPath) },
+  ]).forEach((line) => console.log(line))
+  console.log('')
   console.log(`  ${dim(t('review.syncHint'))}`)
   console.log(`  ${dim(t('review.ctrlc'))}`)
   printUpdateNotice(await latestVersion)

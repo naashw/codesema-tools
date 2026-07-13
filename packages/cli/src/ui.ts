@@ -30,8 +30,26 @@ export function underline(text: string): string {
   return isFancy() ? `\x1b[4m${text}\x1b[0m` : text
 }
 
-export function fieldLabel(name: string): string {
-  return paint(name.padEnd(9), ACCENT)
+const ANSI_PATTERN = /\x1b\[[0-9;]*m/g
+
+function visibleLength(text: string): number {
+  return text.replace(ANSI_PATTERN, '').length
+}
+
+export type FieldRow = { label: string; value: string }
+
+/**
+ * Renders a bkctl-style aligned field block: labels padded to the widest
+ * label IN THIS BLOCK, painted in ACCENT, prefixed with two spaces. Width is
+ * computed on the raw label text so alignment stays correct whether or not
+ * ANSI color codes are active.
+ */
+export function renderFieldRows(rows: FieldRow[]): string[] {
+  const maxLen = rows.reduce((max, row) => Math.max(max, visibleLength(row.label)), 0)
+  return rows.map((row) => {
+    const padded = row.label + ' '.repeat(maxLen + 3 - visibleLength(row.label))
+    return `  ${paint(padded, ACCENT)}${row.value}`
+  })
 }
 
 // ANSI Shadow wordmark, 68 columns: regenerate if the product is renamed.

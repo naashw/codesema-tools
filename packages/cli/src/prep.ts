@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { ensureWorkDir } from './config.js'
 import { currentBranch, git, headSha, mergeBase, refExists, repoRoot, revListCount, tryExec, tryGit } from './git.js'
 import { t } from './i18n.js'
+import { renderFieldRows, type FieldRow } from './ui.js'
 
 const TARGET_CANDIDATES = ['develop', 'main', 'master'] as const
 
@@ -212,14 +213,17 @@ export function prep(opts: { branch?: string; target?: string; cwd: string; quie
   const additions = files.reduce((n, f) => n + f.additions, 0)
   const deletions = files.reduce((n, f) => n + f.deletions, 0)
   if (!opts.quiet) {
-    const label = (key: Parameters<typeof t>[0]) => `  ${t(key).padEnd(8)}: `
     console.log(t('prep.title'))
-    console.log(`${label('prep.label.branch')}${branch}`)
-    console.log(`${label('prep.label.target')}${target} (${source})`)
-    console.log(`${label('prep.label.files')}${files.length} (+${additions} −${deletions})`)
-    console.log(`${label('prep.label.commits')}${commits.length}`)
-    if (custom) console.log(`${label('prep.label.custom')}${t('prep.customNote')}`)
-    console.log(`${label('prep.label.input')}${inputPath}`)
+    console.log('')
+    const rows: FieldRow[] = [
+      { label: t('prep.label.branch'), value: branch },
+      { label: t('prep.label.target'), value: `${target} (${source})` },
+      { label: t('prep.label.files'), value: `${files.length} (+${additions} −${deletions})` },
+      { label: t('prep.label.commits'), value: String(commits.length) },
+      ...(custom ? [{ label: t('prep.label.custom'), value: t('prep.customNote') }] : []),
+      { label: t('prep.label.input'), value: inputPath },
+    ]
+    for (const line of renderFieldRows(rows)) console.log(line)
     console.log('')
     console.log(t('prep.next'))
   }
