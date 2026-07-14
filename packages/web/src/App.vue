@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, shallowRef } from 'vue'
-import type { LiveStatus, PartialReview, ReviewRecord } from './types'
+import type { JudgeLive, LiveStatus, PartialReview, ReviewRecord } from './types'
 import ReviewLive from './components/ReviewLive.vue'
 import ReviewShell from './components/ReviewShell.vue'
 
@@ -9,6 +9,8 @@ import ReviewShell from './components/ReviewShell.vue'
 const record = shallowRef<ReviewRecord | null>(null)
 const status = ref<LiveStatus | null>(null)
 const partial = ref<PartialReview | null>(null)
+const partialB = ref<PartialReview | null>(null)
+const judge = ref<JudgeLive | null>(null)
 const error = ref<string | null>(null)
 let events: EventSource | null = null
 
@@ -32,6 +34,12 @@ function openEvents() {
   })
   events.addEventListener('partial', (e) => {
     partial.value = JSON.parse((e as MessageEvent).data) as PartialReview
+  })
+  events.addEventListener('partial_b', (e) => {
+    partialB.value = JSON.parse((e as MessageEvent).data) as PartialReview
+  })
+  events.addEventListener('judge', (e) => {
+    judge.value = JSON.parse((e as MessageEvent).data) as JudgeLive
   })
   events.addEventListener('done', async () => {
     closeEvents()
@@ -60,7 +68,7 @@ onUnmounted(closeEvents)
 
 <template>
   <ReviewShell v-if="record" :record="record" />
-  <ReviewLive v-else-if="status && !error" :status="status" :partial="partial" />
+  <ReviewLive v-else-if="status && !error" :status="status" :partial="partial" :partial-b="partialB" :judge="judge" />
   <div v-else class="app-state">
     <template v-if="error">
       <p class="app-error">{{ $t('app.loadError') }} ({{ error }})</p>

@@ -7,9 +7,9 @@ import { linkCommand, loadSyncCredentials, syncCommand } from './sync.js'
 import { select } from './tui.js'
 import { configCommand } from './wizard.js'
 
-export type MenuItemId = 'review' | 'show' | 'cloud' | 'config' | 'quit'
+export type MenuItemId = 'review' | 'dualReview' | 'show' | 'cloud' | 'config' | 'quit'
 export type CloudItemId = 'sync' | 'link' | 'syncDelete' | 'back'
-export type MenuActionId = 'review' | 'show' | 'sync' | 'link' | 'syncDelete' | 'config'
+export type MenuActionId = 'review' | 'dualReview' | 'show' | 'sync' | 'link' | 'syncDelete' | 'config'
 
 export type MenuItem<Id extends string> = {
   id: Id
@@ -27,6 +27,11 @@ export function buildMenuItems(context: MenuContext): MenuItem<MenuItemId>[] {
   // action reads as a regression); the hint says where to run them instead.
   return [
     { id: 'review', label: t('menu.review'), hint: context.inRepo ? t('menu.reviewHint') : t('menu.needRepo') },
+    {
+      id: 'dualReview',
+      label: t('menu.dualReview'),
+      hint: context.inRepo ? t('menu.dualReviewHint') : t('menu.needRepo'),
+    },
     { id: 'show', label: t('menu.show'), hint: context.inRepo ? t('menu.showHint') : t('menu.needRepo') },
     {
       id: 'cloud',
@@ -58,7 +63,7 @@ export function buildCloudMenuItems(context: MenuContext): MenuItem<CloudItemId>
   return items
 }
 
-const REVIEW_FLAGS = ['branch', 'target', 'agent', 'full', 'no-open', 'port', 'timeout'] as const
+const REVIEW_FLAGS = ['branch', 'target', 'agent', 'full', 'dual', 'no-open', 'port', 'timeout'] as const
 
 // Bare `codesema` opens the menu, but `codesema --branch x` has always meant
 // "review that branch": any review flag falls through to the review command
@@ -83,6 +88,7 @@ function currentContext(cwd: string): MenuContext {
 function buildActions(cwd: string): MenuActions {
   return {
     review: () => review({ open: true, cwd }),
+    dualReview: () => review({ open: true, cwd, dual: true }),
     show: () => show({ open: true, cwd, port: loadConfig(tryGit(['rev-parse', '--show-toplevel'], cwd)).port }),
     sync: () => syncCommand({ cwd }),
     link: () => linkCommand({}),
@@ -153,7 +159,7 @@ export async function runMenu(opts: { cwd: string }): Promise<void> {
     })
     if (picked === null || picked === 'quit') return
 
-    if ((picked === 'review' || picked === 'show') && !context.inRepo) {
+    if ((picked === 'review' || picked === 'dualReview' || picked === 'show') && !context.inRepo) {
       printNotInRepo()
       continue
     }

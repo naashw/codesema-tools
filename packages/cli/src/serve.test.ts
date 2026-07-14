@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { sanitizeRecord } from './contract.js'
 import { parsePartialReview } from './partial.js'
-import { createSession, isLoopbackHost, resolveStaticPath, startServer, type LiveSession } from './serve.js'
+import { createSession, isLoopbackHost, resolveStaticPath, startServer, type LiveSession, type SessionEvent } from './serve.js'
 
 describe('isLoopbackHost', () => {
   test('accepts loopback hosts, with and without a port', () => {
@@ -66,6 +66,44 @@ describe('resolveStaticPath', () => {
   test('rejects null bytes and undecodable paths', () => {
     expect(resolveStaticPath(root, '/app%00.js')).toBeNull()
     expect(resolveStaticPath(root, '/%zz')).toBeNull()
+  })
+})
+
+describe('createSession dual mode', () => {
+  const partial = parsePartialReview('{"summary":"wip"}')!
+
+  test('mode and judging phase flow through status events', () => {
+    const session = createSession()
+    const events: SessionEvent[] = []
+    session.subscribe((e) => events.push(e))
+
+    session.setMode('dual')
+    expect(session.status().mode).toBe('dual')
+
+    session.setJudging(5)
+    expect(session.status().phase).toBe('judging')
+    expect(session.judge()).toEqual({ total: 5, decisions: [] })
+    expect(events.filter((e) => e.name === 'status').length).toBeGreaterThanOrEqual(2)
+  })
+
+  test('lane B partial is stored and emitted separately from lane A', () => {
+    const session = createSession()
+    const events: SessionEvent[] = []
+    session.subscribe((e) => events.push(e))
+
+    session.setPartial(partial)
+    session.setPartialB({ ...partial, summary: 'prosecutor wip' })
+
+    expect(session.partial()?.summary).toBe('wip')
+    expect(session.partialB()?.summary).toBe('prosecutor wip')
+    expect(events.map((e) => e.name)).toEqual(['partial', 'partial_b'])
+  })
+
+  test('judge decisions accumulate and are readable back', () => {
+    const session = createSession()
+    session.setJudging(3)
+    session.setJudge({ total: 3, decisions: [{ id: 'A0', action: 'keep' }] })
+    expect(session.judge()?.decisions).toHaveLength(1)
   })
 })
 

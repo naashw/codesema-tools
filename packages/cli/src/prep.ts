@@ -8,6 +8,8 @@ import { renderFieldRows, type FieldRow } from './ui.js'
 
 const TARGET_CANDIDATES = ['develop', 'main', 'master'] as const
 
+const COMMIT_SUBJECT_MAX = 120
+
 const DEFAULT_EXCLUDES = [
   'package-lock.json',
   'yarn.lock',
@@ -137,9 +139,10 @@ function excludePathspecs(cwd: string): string[] {
  * MR diff over a range, same exclusions as prep (lockfiles, .codesema-ignore).
  * quotePath=false: without it, git escapes non-ASCII filenames as octal
  * sequences (e.g. "caf\303\251.txt"), and finding-to-file matching breaks in the UI.
+ * -U10: reviewers judge changes against the enclosing code, not three bare lines.
  */
 export function mrDiff(range: string, cwd: string, excludes = excludePathspecs(cwd)): string {
-  return git(['-c', 'core.quotePath=false', 'diff', '--no-color', range, '--', '.', ...excludes], cwd)
+  return git(['-c', 'core.quotePath=false', 'diff', '--no-color', '-U10', range, '--', '.', ...excludes], cwd)
 }
 
 export function prep(opts: { branch?: string; target?: string; cwd: string; quiet?: boolean }): PrepInput {
@@ -176,6 +179,13 @@ export function prep(opts: { branch?: string; target?: string; cwd: string; quie
   const commits = (tryGit(['log', '--pretty=%s', `${target}..${headRef}`, '--max-count=30'], cwd) ?? '')
     .split('\n')
     .filter(Boolean)
+    .map((subject) => {
+      // Truncate by code points: a UTF-16 slice can split a surrogate pair.
+      const codePoints = Array.from(subject)
+      return codePoints.length > COMMIT_SUBJECT_MAX
+        ? `${codePoints.slice(0, COMMIT_SUBJECT_MAX - 1).join('')}…`
+        : subject
+    })
 
   const files = (tryGit(['-c', 'core.quotePath=false', 'diff', '--numstat', range, '--', '.', ...excludes], cwd) ?? '')
     .split('\n')

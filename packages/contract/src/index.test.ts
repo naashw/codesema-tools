@@ -1,11 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 import {
   detectDiffSecrets,
+  groundReview,
   reviewRecordSchema,
   sanitizeFindings,
   sanitizeNarrative,
   sanitizeRecord,
   sanitizeReview,
+  type Finding,
+  type SanitizedReview,
 } from './index.js'
 
 describe('sanitizeReview', () => {
@@ -24,6 +27,18 @@ describe('sanitizeReview', () => {
   test('summary: trim + truncation to 2000', () => {
     expect(sanitizeReview({ summary: '  ok  ' }).summary).toBe('ok')
     expect(sanitizeReview({ summary: 'x'.repeat(3000) }).summary.length).toBe(2000)
+  })
+
+  test('files_reviewed: strings kept trimmed and deduped, absent otherwise', () => {
+    const r = sanitizeReview({ files_reviewed: [' a.ts ', 'b.ts', 'a.ts', 42, ''] })
+    expect(r.files_reviewed).toEqual(['a.ts', 'b.ts'])
+    expect(sanitizeReview({}).files_reviewed).toBeUndefined()
+    expect(sanitizeReview({ files_reviewed: 'a.ts' }).files_reviewed).toBeUndefined()
+  })
+
+  test('files_reviewed: capped at 500 entries', () => {
+    const many = sanitizeReview({ files_reviewed: Array.from({ length: 600 }, (_, i) => `f${i}.ts`) })
+    expect(many.files_reviewed?.length).toBe(500)
   })
 })
 
@@ -46,6 +61,24 @@ describe('sanitizeFindings', () => {
     const [g] = sanitizeFindings([{ file: 'a.ts', message: 'm', severity: 'minor', line: 10, endLine: 4 }])
     expect(g?.line).toBe(10)
     expect(g?.endLine).toBeUndefined()
+  })
+
+  test('consensus kept only when strictly true', () => {
+    const [f] = sanitizeFindings([{ file: 'a.ts', message: 'm', severity: 'minor', consensus: true }])
+    expect(f?.consensus).toBe(true)
+    const [g] = sanitizeFindings([{ file: 'a.ts', message: 'm', severity: 'minor', consensus: 'yes' }])
+    expect(g?.consensus).toBeUndefined()
+    const [h] = sanitizeFindings([{ file: 'a.ts', message: 'm', severity: 'minor' }])
+    expect(h?.consensus).toBeUndefined()
+  })
+
+  test('praise and why findings are forced to info severity', () => {
+    const [praise] = sanitizeFindings([{ file: 'a.ts', message: 'm', severity: 'critical', kind: 'praise' }])
+    expect(praise?.severity).toBe('info')
+    const [why] = sanitizeFindings([{ file: 'a.ts', message: 'm', severity: 'major', kind: 'why' }])
+    expect(why?.severity).toBe('info')
+    const [bug] = sanitizeFindings([{ file: 'a.ts', message: 'm', severity: 'critical', kind: 'security' }])
+    expect(bug?.severity).toBe('critical')
   })
 
   test('title/suggestion truncated', () => {
@@ -150,6 +183,14 @@ describe('sanitizeRecord', () => {
     expect(record?.diff).toBe('')
     expect(record?.review.verdict).toBe('approve')
   })
+
+  test('dual stats kept when they are non-negative integers, dropped otherwise', () => {
+    const dual = { merged: 2, rejected: 1, added_by_b: 3 }
+    expect(sanitizeRecord({ meta: { dual } })?.meta.dual).toEqual(dual)
+    expect(sanitizeRecord({ meta: { dual: { merged: -1, rejected: 0, added_by_b: 0 } } })?.meta.dual).toBeUndefined()
+    expect(sanitizeRecord({ meta: { dual: 'yes' } })?.meta.dual).toBeUndefined()
+    expect(sanitizeRecord({ meta: {} })?.meta.dual).toBeUndefined()
+  })
 })
 
 function diffFor(path: string, added: string[] = []): string {
@@ -190,6 +231,186 @@ describe('detectDiffSecrets', () => {
   test('duplicate hits for the same file, reason and detail are collapsed', () => {
     const diff = diffFor('src/app.ts', ['a = "AKIAIOSFODNN7EXAMPLE"', 'b = "AKIAIOSFODNN7EXAMPLE"'])
     expect(detectDiffSecrets(diff)).toHaveLength(1)
+  })
+})
+
+const GROUND_DIFF = [
+  'diff --git a/src/auth.ts b/src/auth.ts',
+  'index 1111111..2222222 100644',
+  '--- a/src/auth.ts',
+  '+++ b/src/auth.ts',
+  '@@ -10,4 +10,6 @@ export function login() {',
+  ' line10',
+  '+line11',
+  '+line12',
+  ' line13',
+  ' line14',
+  ' line15',
+  '@@ -40,2 +42,2 @@',
+  ' line42',
+  '-old line',
+  '+line43',
+  'diff --git a/docs/removed.md b/docs/removed.md',
+  'deleted file mode 100644',
+  '--- a/docs/removed.md',
+  '+++ /dev/null',
+  '@@ -1,3 +0,0 @@',
+  '-a',
+  '-b',
+  '-c',
+].join('\n')
+
+function reviewWith(findings: Finding[], overrides: Partial<SanitizedReview> = {}): SanitizedReview {
+  return { verdict: 'comment', summary: 's', findings, narrative: null, ...overrides }
+}
+
+describe('groundReview', () => {
+  test('finding on a file absent from the diff is dropped and reported', () => {
+    const ghost: Finding = { file: 'src/ghost.ts', line: 3, severity: 'major', message: 'm' }
+    const kept: Finding = { file: 'src/auth.ts', line: 11, severity: 'minor', message: 'm' }
+    const { review, report } = groundReview(reviewWith([ghost, kept]), GROUND_DIFF)
+    expect(review.findings).toEqual([kept])
+    expect(report.dropped).toEqual([ghost])
+  })
+
+  test('line outside every hunk is de-anchored, finding kept', () => {
+    const { review, report } = groundReview(
+      reviewWith([{ file: 'src/auth.ts', line: 99, endLine: 100, severity: 'major', message: 'm' }]),
+      GROUND_DIFF,
+    )
+    expect(review.findings).toEqual([{ file: 'src/auth.ts', severity: 'major', message: 'm' }])
+    expect(report.deanchored).toHaveLength(1)
+  })
+
+  test('line inside a hunk is untouched, including the second hunk', () => {
+    const findings: Finding[] = [
+      { file: 'src/auth.ts', line: 10, severity: 'minor', message: 'm' },
+      { file: 'src/auth.ts', line: 43, severity: 'minor', message: 'm' },
+    ]
+    const { review, report } = groundReview(reviewWith(findings), GROUND_DIFF)
+    expect(review.findings).toEqual(findings)
+    expect(report.dropped).toEqual([])
+    expect(report.deanchored).toEqual([])
+  })
+
+  test('endLine past the hunk is stripped while a valid line is kept', () => {
+    const { review } = groundReview(
+      reviewWith([{ file: 'src/auth.ts', line: 14, endLine: 30, severity: 'minor', message: 'm' }]),
+      GROUND_DIFF,
+    )
+    expect(review.findings[0]?.line).toBe(14)
+    expect(review.findings[0]?.endLine).toBeUndefined()
+  })
+
+  test('deleted file: file-level finding kept, line anchor removed', () => {
+    const { review, report } = groundReview(
+      reviewWith([
+        { file: 'docs/removed.md', severity: 'info', kind: 'why', message: 'm' },
+        { file: 'docs/removed.md', line: 2, severity: 'minor', message: 'm' },
+      ]),
+      GROUND_DIFF,
+    )
+    expect(review.findings).toHaveLength(2)
+    expect(review.findings[1]?.line).toBeUndefined()
+    expect(report.dropped).toEqual([])
+    expect(report.deanchored).toHaveLength(1)
+  })
+
+  test('duplicates (same file, line, kind) merge into the first with the highest severity', () => {
+    const { review, report } = groundReview(
+      reviewWith([
+        { file: 'src/auth.ts', line: 11, severity: 'minor', kind: 'security', message: 'first' },
+        { file: 'src/auth.ts', line: 11, severity: 'critical', kind: 'security', message: 'louder duplicate' },
+        { file: 'src/auth.ts', line: 11, severity: 'minor', kind: 'perf', message: 'different kind, kept' },
+      ]),
+      GROUND_DIFF,
+    )
+    expect(review.findings).toHaveLength(2)
+    expect(review.findings[0]?.message).toBe('first')
+    expect(review.findings[0]?.severity).toBe('critical')
+    expect(report.merged).toBe(1)
+  })
+
+  test('duplicate merge keeps the consensus flag from either copy', () => {
+    const { review } = groundReview(
+      reviewWith([
+        { file: 'src/auth.ts', line: 11, severity: 'major', kind: 'design', message: 'first' },
+        { file: 'src/auth.ts', line: 11, severity: 'minor', kind: 'design', message: 'duplicate', consensus: true },
+      ]),
+      GROUND_DIFF,
+    )
+    expect(review.findings).toHaveLength(1)
+    expect(review.findings[0]?.consensus).toBe(true)
+    expect(review.findings[0]?.severity).toBe('major')
+  })
+
+  test('findings without a line are never merged', () => {
+    const { review, report } = groundReview(
+      reviewWith([
+        { file: 'src/auth.ts', severity: 'minor', kind: 'design', message: 'one' },
+        { file: 'src/auth.ts', severity: 'minor', kind: 'design', message: 'two' },
+      ]),
+      GROUND_DIFF,
+    )
+    expect(review.findings).toHaveLength(2)
+    expect(report.merged).toBe(0)
+  })
+
+  test('narrative finding_refs are remapped after drops and merges', () => {
+    const narrative = {
+      intent: 'i',
+      confidence: 'high' as const,
+      steps: [
+        {
+          title: 'Step',
+          rationale: 'r',
+          files: ['src/auth.ts'],
+          finding_refs: [0, 1, 2, 3],
+        },
+      ],
+      review_first: [],
+    }
+    const { review } = groundReview(
+      reviewWith(
+        [
+          { file: 'src/ghost.ts', severity: 'major', message: 'dropped' },
+          { file: 'src/auth.ts', line: 11, severity: 'minor', kind: 'perf', message: 'kept first' },
+          { file: 'src/auth.ts', line: 11, severity: 'minor', kind: 'perf', message: 'merged into 1' },
+          { file: 'src/auth.ts', line: 43, severity: 'minor', message: 'kept last' },
+        ],
+        { narrative },
+      ),
+      GROUND_DIFF,
+    )
+    expect(review.findings).toHaveLength(2)
+    expect(review.narrative?.steps[0]?.finding_refs).toEqual([0, 1])
+  })
+
+  test('approve with a surviving critical finding escalates to request_changes', () => {
+    const { review, report } = groundReview(
+      reviewWith([{ file: 'src/auth.ts', line: 11, severity: 'critical', message: 'm' }], { verdict: 'approve' }),
+      GROUND_DIFF,
+    )
+    expect(review.verdict).toBe('request_changes')
+    expect(report.verdict_escalated).toBe(true)
+  })
+
+  test('approve stays approve when the only critical finding was dropped', () => {
+    const { review, report } = groundReview(
+      reviewWith([{ file: 'src/ghost.ts', severity: 'critical', message: 'm' }], { verdict: 'approve' }),
+      GROUND_DIFF,
+    )
+    expect(review.verdict).toBe('approve')
+    expect(report.verdict_escalated).toBe(false)
+  })
+
+  test('unparseable diff: review returned unchanged', () => {
+    const findings: Finding[] = [{ file: 'src/ghost.ts', line: 1, severity: 'critical', message: 'm' }]
+    const input = reviewWith(findings, { verdict: 'approve' })
+    const { review, report } = groundReview(input, 'not a diff at all')
+    expect(review).toEqual(input)
+    expect(report.dropped).toEqual([])
+    expect(report.verdict_escalated).toBe(false)
   })
 })
 

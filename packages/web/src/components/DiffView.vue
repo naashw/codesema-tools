@@ -222,6 +222,10 @@ watch(
                   class="nlr-kind"
                   :style="{ color: resolveKind(f).color, background: resolveKind(f).bg }"
                 >{{ resolveKind(f).label }}</span>
+                <span v-if="f.consensus" class="nlr-consensus" :title="$t('finding.consensus')">
+                  <span class="nlr-consensus-dots" aria-hidden="true"><span /><span /></span>
+                  {{ $t('finding.consensus') }}
+                </span>
               </div>
               <p v-if="f.title" class="nlr-note-title">
                 <template v-for="(part, j) in richParts(f.title)" :key="j">
@@ -275,6 +279,10 @@ watch(
                         class="nlr-kind"
                         :style="{ color: resolveKind(row.note).color, background: resolveKind(row.note).bg }"
                       >{{ resolveKind(row.note).label }}</span>
+                      <span v-if="row.note.consensus" class="nlr-consensus" :title="$t('finding.consensus')">
+                        <span class="nlr-consensus-dots" aria-hidden="true"><span /><span /></span>
+                        {{ $t('finding.consensus') }}
+                      </span>
                     </div>
                     <p v-if="row.note.title" class="nlr-note-title">
                       <template v-for="(part, j) in richParts(row.note.title)" :key="j">
@@ -307,6 +315,10 @@ watch(
                             class="nlr-kind"
                             :style="{ color: resolveKind(extraNote).color, background: resolveKind(extraNote).bg }"
                           >{{ resolveKind(extraNote).label }}</span>
+                          <span v-if="extraNote.consensus" class="nlr-consensus" :title="$t('finding.consensus')">
+                            <span class="nlr-consensus-dots" aria-hidden="true"><span /><span /></span>
+                            {{ $t('finding.consensus') }}
+                          </span>
                         </div>
                         <p v-if="extraNote.title" class="nlr-note-title">
                           <template v-for="(part, j) in richParts(extraNote.title)" :key="j">
@@ -349,6 +361,10 @@ watch(
                           class="nlr-kind"
                           :style="{ color: resolveKind(srow.note).color, background: resolveKind(srow.note).bg }"
                         >{{ resolveKind(srow.note).label }}</span>
+                        <span v-if="srow.note.consensus" class="nlr-consensus" :title="$t('finding.consensus')">
+                          <span class="nlr-consensus-dots" aria-hidden="true"><span /><span /></span>
+                          {{ $t('finding.consensus') }}
+                        </span>
                       </div>
                       <p v-if="srow.note.title" class="nlr-note-title">
                         <template v-for="(part, j) in richParts(srow.note.title)" :key="j">
@@ -765,6 +781,45 @@ watch(
   text-transform: uppercase;
   border-radius: 999px;
   padding: 2px 9px;
+}
+
+.nlr-consensus {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 2px 9px;
+  color: var(--codesema-risk-low);
+  background: var(--codesema-risk-low-soft);
+}
+
+.nlr-consensus-dots {
+  position: relative;
+  width: 11px;
+  height: 8px;
+  flex-shrink: 0;
+}
+
+.nlr-consensus-dots span {
+  position: absolute;
+  top: 1px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.nlr-consensus-dots span:first-child {
+  left: 0;
+}
+
+.nlr-consensus-dots span:last-child {
+  left: 5px;
+  opacity: 0.65;
 }
 
 .nlr-note-title {

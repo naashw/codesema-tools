@@ -7,11 +7,13 @@ import { fileURLToPath } from 'node:url'
 import type { ReviewRecord } from './contract.js'
 import type { FixRunner } from './fix.js'
 import { t } from './i18n.js'
+import type { JudgeDecision } from './dual.js'
 import type { PartialReview } from './partial.js'
 
 const WEB_DIST = fileURLToPath(new URL('../web-dist', import.meta.url))
 
-export type LivePhase = 'reviewing' | 'done' | 'error'
+export type LivePhase = 'reviewing' | 'judging' | 'done' | 'error'
+export type LiveMode = 'simple' | 'dual'
 
 export type LiveInput = {
   branch: string
@@ -26,23 +28,37 @@ export type LiveInput = {
 export type LiveStatus = {
   phase: LivePhase
   started_at: string
+  mode?: LiveMode
   agent?: string
   input?: LiveInput
   error?: string
 }
 
+export type JudgeLive = {
+  total: number
+  decisions: JudgeDecision[]
+}
+
 export type SessionEvent =
   | { name: 'status'; data: LiveStatus }
   | { name: 'partial'; data: PartialReview }
+  | { name: 'partial_b'; data: PartialReview }
+  | { name: 'judge'; data: JudgeLive }
   | { name: 'done'; data: Record<string, never> }
 
 export type LiveSession = {
   status: () => LiveStatus
   record: () => ReviewRecord | null
   partial: () => PartialReview | null
+  partialB: () => PartialReview | null
+  judge: () => JudgeLive | null
   setAgent: (agent: string) => void
+  setMode: (mode: LiveMode) => void
   setInput: (input: LiveInput) => void
   setPartial: (partial: PartialReview) => void
+  setPartialB: (partial: PartialReview) => void
+  setJudging: (total: number) => void
+  setJudge: (judge: JudgeLive) => void
   setDone: (record: ReviewRecord) => void
   setError: (message: string) => void
   subscribe: (listener: (event: SessionEvent) => void) => () => void
@@ -52,6 +68,8 @@ export function createSession(initial?: { record?: ReviewRecord }): LiveSession 
   const listeners = new Set<(event: SessionEvent) => void>()
   let record: ReviewRecord | null = initial?.record ?? null
   let partial: PartialReview | null = null
+  let partialB: PartialReview | null = null
+  let judge: JudgeLive | null = null
   let status: LiveStatus = {
     phase: record ? 'done' : 'reviewing',
     started_at: new Date().toISOString(),
@@ -66,8 +84,14 @@ export function createSession(initial?: { record?: ReviewRecord }): LiveSession 
     status: () => status,
     record: () => record,
     partial: () => partial,
+    partialB: () => partialB,
+    judge: () => judge,
     setAgent(agent) {
       status = { ...status, agent }
+      emitStatus()
+    },
+    setMode(mode) {
+      status = { ...status, mode }
       emitStatus()
     },
     setInput(input) {
@@ -77,6 +101,20 @@ export function createSession(initial?: { record?: ReviewRecord }): LiveSession 
     setPartial(next) {
       partial = next
       emit({ name: 'partial', data: next })
+    },
+    setPartialB(next) {
+      partialB = next
+      emit({ name: 'partial_b', data: next })
+    },
+    setJudging(total) {
+      judge = { total, decisions: [] }
+      status = { ...status, phase: 'judging' }
+      emitStatus()
+      emit({ name: 'judge', data: judge })
+    },
+    setJudge(next) {
+      judge = next
+      emit({ name: 'judge', data: next })
     },
     setDone(next) {
       record = next
@@ -171,6 +209,10 @@ function serveEvents(session: LiveSession, req: IncomingMessage, res: ServerResp
   send({ name: 'status', data: session.status() })
   const partial = session.partial()
   if (partial) send({ name: 'partial', data: partial })
+  const partialB = session.partialB()
+  if (partialB) send({ name: 'partial_b', data: partialB })
+  const judge = session.judge()
+  if (judge) send({ name: 'judge', data: judge })
   if (session.status().phase === 'done') send({ name: 'done', data: {} })
 
   req.on('close', () => {

@@ -36,6 +36,8 @@ Options:
   --port <n>          Preferred port for the local server (default: 4400)
   --timeout <s>       Agent time budget in seconds for \`review\` (default: 900)
   --full              Review from scratch instead of updating the previous review
+  --dual              Dual review: two independent reviewers run in parallel (same agent,
+                      different angles), then a judge model merges their findings
   --no-open           Do not open the browser
   -h, --help          Show this help
   -v, --version       Show version
@@ -90,6 +92,16 @@ version exists (nothing is sent). Set CODESEMA_NO_UPDATE_CHECK=1 to disable.
   'review.findingCount': '{n} finding | {n} findings',
   'review.modeIncremental': 'incremental',
   'review.modeIncrementalHint': '· updating the review done at {sha} · pass --full to start over',
+  'review.modeDual': 'dual · two reviewers + a judge',
+  'review.dualLaneA': 'reviewer',
+  'review.dualLaneB': 'prosecutor',
+  'review.dualJudging': 'deliberation · {n} notes on the bench',
+  'review.dualJudgeProgress': 'deliberation · {done}/{total} adjudicated',
+  'review.dualStats': 'dual review: {merged} merged · {rejected} rejected by the judge · {added} added by the prosecutor',
+  'review.dualConsensus': '{n} note raised by both reviewers | {n} notes raised by both reviewers',
+  'review.coverageGap': '⚠ {lane} did not examine {n} file(s): {files}',
+  'review.dualReviewerFailed': 'one reviewer failed ({message}); finished with the surviving review',
+  'review.dualJudgeFailed': 'judge unusable ({message}); kept the union of both reviews',
   'review.customPrompt': 'custom instructions from .codesema/PROMPT.md merged into the agent prompt',
   'review.webLiveHint': '· live, findings appear as the agent works',
   'review.spinner': 'reviewing with {cmd}',
@@ -100,9 +112,17 @@ version exists (nothing is sent). Set CODESEMA_NO_UPDATE_CHECK=1 to disable.
   'review.gateReasonSeverity': '{n} finding(s) at or above {level}',
   'review.gateReasonVerdict': 'changes requested',
   'review.unusableOutput': 'unusable agent output',
+  'review.groundedDropped': '{n} finding dropped: file not in the diff | {n} findings dropped: file not in the diff',
+  'review.groundedDeanchored': '{n} line anchor removed: line outside the diff | {n} line anchors removed: lines outside the diff',
+  'review.groundedMerged': '{n} duplicate finding merged | {n} duplicate findings merged',
+  'review.groundedVerdict': 'verdict escalated to request_changes: critical finding on an approve',
   'review.ready': 'review ready',
   'review.ctrlc': 'Ctrl+C to stop',
   'review.syncHint': 'codesema sync  saves this review to your codesema.com workspace',
+  'review.syncPushed': '☁ review synced to your linked codesema.com workspace',
+  'review.syncAlready': '☁ review already synced (identical content)',
+  'review.syncBlockedSecrets': '☁ sync skipped: {n} potential secret(s) in the diff · codesema sync --force to override',
+  'review.syncFailed': '☁ sync failed: {message} · the review stays archived locally',
 
   'notify.failedRun': 'review failed: agent run failed',
   'notify.failedOutput': 'review failed: unusable agent output',
@@ -256,8 +276,10 @@ version exists (nothing is sent). Set CODESEMA_NO_UPDATE_CHECK=1 to disable.
   'sync.badResponse': 'unexpected response from {url}: required fields are missing or invalid',
 
   'menu.title': 'What do you want to do?',
-  'menu.review': 'Review a branch',
+  'menu.review': 'Simple review',
   'menu.reviewHint': 'pick a branch and start a review',
+  'menu.dualReview': 'Dual review',
+  'menu.dualReviewHint': 'two reviewers in parallel, a judge merges their notes',
   'menu.show': 'Show last review',
   'menu.showHint': 'open the last review in the local web UI',
   'menu.sync': 'Sync',
@@ -320,6 +342,8 @@ Options :
   --port <n>          Port préféré du serveur local (défaut : 4400)
   --timeout <s>       Budget de temps de l'agent en secondes pour \`review\` (défaut : 900)
   --full              Revue complète au lieu de mettre à jour la revue précédente
+  --dual              Revue duale : deux reviewers indépendants en parallèle (même agent,
+                      angles différents), puis un modèle juge fusionne leurs notes
   --no-open           Ne pas ouvrir le navigateur
   -h, --help          Afficher cette aide
   -v, --version       Afficher la version
@@ -374,6 +398,16 @@ version existe (rien n'est envoyé). CODESEMA_NO_UPDATE_CHECK=1 pour désactiver
   'review.findingCount': '{n} note | {n} notes',
   'review.modeIncremental': 'incrémental',
   'review.modeIncrementalHint': '· mise à jour de la revue faite à {sha} · passez --full pour repartir de zéro',
+  'review.modeDual': 'duale · deux reviewers + un juge',
+  'review.dualLaneA': 'reviewer',
+  'review.dualLaneB': 'procureur',
+  'review.dualJudging': 'délibération · {n} notes à arbitrer',
+  'review.dualJudgeProgress': 'délibération · {done}/{total} arbitrées',
+  'review.dualStats': 'revue duale : {merged} fusionnées · {rejected} rejetées par le juge · {added} ajoutées par le procureur',
+  'review.dualConsensus': '{n} note relevée par les deux reviewers | {n} notes relevées par les deux reviewers',
+  'review.coverageGap': '⚠ {lane} n\'a pas examiné {n} fichier(s) : {files}',
+  'review.dualReviewerFailed': 'un reviewer a échoué ({message}) ; la revue survivante a été utilisée',
+  'review.dualJudgeFailed': 'juge inutilisable ({message}) ; union des deux revues conservée',
   'review.customPrompt': 'instructions personnalisées de .codesema/PROMPT.md fusionnées dans le prompt de l\'agent',
   'review.webLiveHint': '· en direct, les notes apparaissent pendant que l\'agent travaille',
   'review.spinner': 'revue avec {cmd}',
@@ -384,9 +418,17 @@ version existe (rien n'est envoyé). CODESEMA_NO_UPDATE_CHECK=1 pour désactiver
   'review.gateReasonSeverity': '{n} finding(s) au niveau {level} ou supérieur',
   'review.gateReasonVerdict': 'changements demandés',
   'review.unusableOutput': 'sortie d\'agent inutilisable',
+  'review.groundedDropped': '{n} finding écarté : fichier absent du diff | {n} findings écartés : fichier absent du diff',
+  'review.groundedDeanchored': '{n} ancre de ligne retirée : ligne hors du diff | {n} ancres de ligne retirées : lignes hors du diff',
+  'review.groundedMerged': '{n} finding doublon fusionné | {n} findings doublons fusionnés',
+  'review.groundedVerdict': 'verdict passé à request_changes : finding critique sur un approve',
   'review.ready': 'revue prête',
   'review.ctrlc': 'Ctrl+C pour arrêter',
   'review.syncHint': 'codesema sync  enregistre cette review dans votre workspace codesema.com',
+  'review.syncPushed': '☁ revue synchronisée sur votre workspace codesema.com lié',
+  'review.syncAlready': '☁ revue déjà synchronisée (contenu identique)',
+  'review.syncBlockedSecrets': '☁ synchro ignorée : {n} secret(s) potentiel(s) dans la diff · codesema sync --force pour forcer',
+  'review.syncFailed': '☁ échec de la synchro : {message} · la revue reste archivée en local',
 
   'notify.failedRun': 'échec de la revue : échec de l\'agent',
   'notify.failedOutput': 'échec de la revue : sortie d\'agent inutilisable',
@@ -540,8 +582,10 @@ version existe (rien n'est envoyé). CODESEMA_NO_UPDATE_CHECK=1 pour désactiver
   'sync.badResponse': 'réponse inattendue de {url} : champs requis manquants ou invalides',
 
   'menu.title': 'Que voulez-vous faire ?',
-  'menu.review': 'Passer une branche en revue',
+  'menu.review': 'Revue simple',
   'menu.reviewHint': 'choisir une branche et démarrer une revue',
+  'menu.dualReview': 'Revue duale',
+  'menu.dualReviewHint': 'deux reviewers en parallèle, un juge fusionne leurs notes',
   'menu.show': 'Afficher la dernière revue',
   'menu.showHint': 'ouvrir la dernière revue dans l\'UI web locale',
   'menu.sync': 'Synchroniser',

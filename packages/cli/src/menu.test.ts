@@ -16,14 +16,14 @@ describe('buildMenuItems', () => {
     for (const hasSyncCredentials of [true, false]) {
       for (const inRepo of [true, false]) {
         const items = buildMenuItems({ hasSyncCredentials, inRepo })
-        expect(items.map((item) => item.id)).toEqual(['review', 'show', 'cloud', 'config', 'quit'])
+        expect(items.map((item) => item.id)).toEqual(['review', 'dualReview', 'show', 'cloud', 'config', 'quit'])
       }
     }
   })
 
   test('review and show are hinted to run inside a repo when outside one', () => {
     const items = buildMenuItems({ hasSyncCredentials: false, inRepo: false })
-    for (const id of ['review', 'show'] as const) {
+    for (const id of ['review', 'dualReview', 'show'] as const) {
       expect(items.find((item) => item.id === id)?.hint).toBe(t('menu.needRepo'))
     }
   })
@@ -87,6 +87,7 @@ describe('reviewFlagsPassed', () => {
     }
     expect(reviewFlagsPassed({ full: true })).toBe(true)
     expect(reviewFlagsPassed({ 'no-open': true })).toBe(true)
+    expect(reviewFlagsPassed({ dual: true })).toBe(true)
   })
 
   test('flags of other commands still open the menu', () => {
@@ -104,6 +105,9 @@ describe('dispatchMenuAction', () => {
     const actions: MenuActions = {
       review: async () => {
         calls.push('review')
+      },
+      dualReview: async () => {
+        calls.push('dualReview')
       },
       show: async () => {
         calls.push('show')
@@ -125,7 +129,7 @@ describe('dispatchMenuAction', () => {
   }
 
   test('routes each id to its matching action and none other', async () => {
-    const ids: MenuActionId[] = ['review', 'show', 'sync', 'link', 'syncDelete', 'config']
+    const ids: MenuActionId[] = ['review', 'dualReview', 'show', 'sync', 'link', 'syncDelete', 'config']
     for (const id of ids) {
       const { actions, calls } = spyActions()
       await dispatchMenuAction(id, actions)

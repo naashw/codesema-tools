@@ -7,7 +7,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ### Added
 
+- Dual review (`codesema review --dual`, or "Dual review" in the menu): two independent reviewers run in parallel on the same agent CLI — the reviewer (full narrative review) and the prosecutor (adversarial, findings only) — then a judge on the provider's mid-tier model (sonnet / gpt-5.5 / gemini-2.5-pro) adjudicates every finding: kept, merged as duplicate, or rejected with a reason. Security findings can never be rejected by the judge. Findings raised by both reviewers carry a `consensus` badge; the record stores the deliberation stats (`meta.dual`). If one reviewer fails the review finishes with the survivor; if the judge fails the union of both reviews is kept. Dual reviews always run from scratch (no incremental update).
+- The live web UI shows both dual phases, at no extra token cost (everything derives from the two streams and the judge stream): a face-à-face of the two reviewers with live severity counters, a per-file consensus map where files lit by both lanes pulse as hot zones, then the deliberation with each judge decision resolving live (kept / merged / rejected with the reason).
+- Deterministic grounding of the agent review against the diff, before display and archive (`groundReview` in `@codesema/contract` 0.3.0): findings on files absent from the diff are dropped, line anchors outside every hunk are removed, duplicate findings (same file, line and kind) merge into one with the highest severity, and an `approve` verdict with a surviving critical finding is escalated to `request_changes`. `codesema review` prints what was corrected.
 - `impact_candidates` in the prep input and the review prompt: when the MR modifies or removes an exported declaration (TypeScript/JavaScript exports, Python top-level `def`/`class`), `codesema prep` lists where that symbol is used elsewhere in the repository (`git grep`, word-matched, capped and deduplicated) and which files import the changed files, so the agent can flag call sites the diff does not update. Zero new dependencies; the block is explicitly labeled as best-effort text matches, and the review instructions require the agent to treat it as leads to verify, never as facts.
+- Reviewer coverage tracking: both reviewers report the diff files they examined (`files_reviewed` in `@codesema/contract` 0.3.0) and `codesema review` warns about any diff file a reviewer skipped (full reviews only; incremental updates are exempt).
+- Deterministic cross-lane consensus: findings raised by both dual reviewers on the same file, line and kind merge before the judge runs — fewer decisions to pay for, and the consensus badge survives even a judge failure.
+- Auto-sync: when cloud sync is already set up (`codesema sync` ran once), every completed review is pushed to the linked codesema.com workspace automatically. Best-effort and never blocking: a sync failure or a diff carrying potential secrets keeps the review local and says so (secrets still require a manual `codesema sync --force`).
+- One automatic retry when the agent output holds no parseable JSON review (lanes, judge and simple review), with a short corrective instruction; agent crashes and timeouts are never retried.
+- A prompt evaluation bench under `packages/cli/eval/` (labeled bug fixtures + recall/noise report) to measure reviewer prompts before and after changes; development tool, not shipped.
+
+### Changed
+
+- Hardened reviewer prompts: mandatory file-by-file sweep with no early stop and no implicit findings cap, severity definitions by consequence, mandatory concrete failure scenario per finding, strict line anchoring (omit the line rather than guess), a pre-output self-check, and systematic follow-up of `impact_candidates` usages. The judge must cite the exact diff lines when rejecting a finding and shares the same severity scale.
+- The review diff now carries 10 context lines per hunk (git default is 3), so reviewers judge changes against the enclosing code.
+- A `praise`/`why` finding is always severity `info`: a mis-scored praise can no longer escalate the verdict or trip `--fail-on`.
+
+- The agent prompt no longer carries prep plumbing: the absolute repository path, commit SHAs and internal metadata are stripped; the agent receives only the branch names, commit subjects, changed files, custom instructions and the diff.
+- Commit subjects are truncated to 120 characters in the prep input, and the review instructions now state that commit messages are intent context only, never evidence.
+
+### Security
+
+- The review subprocess runs the known agent CLIs with tools switched off: `claude -p` gets `--tools "" --strict-mcp-config --setting-sources user` (no tools, no MCP servers, repo-level `.claude/` settings ignored) and `codex exec` gets `--sandbox read-only --ask-for-approval never` plus `AGENTS.md` loading disabled. Flags already present in the command win; the fix runner keeps its edit tools. Gemini has no CLI flag for this; its non-interactive mode already denies shell and write tools.
+- Known agent CLIs are spawned with a minimal environment (`PATH`, `HOME`, locale, proxy and the provider's own variables): other credentials and tokens in your environment no longer reach the review subprocess. Custom agent commands inherit the full environment as before.
 
 ## [0.7.0] - 2026-07-13
 

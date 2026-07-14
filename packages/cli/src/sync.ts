@@ -122,6 +122,36 @@ export async function pushReview(
   )
 }
 
+export type AutoPushOutcome =
+  | { status: 'disabled' }
+  | { status: 'pushed'; deduplicated: boolean }
+  | { status: 'blocked_secrets'; count: number }
+  | { status: 'failed'; message: string }
+
+/**
+ * Best-effort push of a fresh review when the workspace is already set up:
+ * never interactive, never throws, so a sync failure cannot fail the review
+ * run. The manual `codesema sync` secret gate applies unchanged: a diff
+ * carrying secrets stays on the machine.
+ */
+export async function autoPushReview(
+  record: ReviewRecord,
+  cwd: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<AutoPushOutcome> {
+  const creds = loadSyncCredentials()
+  if (!creds) return { status: 'disabled' }
+  const secrets = detectDiffSecrets(record.diff)
+  if (secrets.length > 0) return { status: 'blocked_secrets', count: secrets.length }
+  try {
+    const remoteUrl = tryGit(['remote', 'get-url', 'origin'], cwd)
+    const result = await pushReview({ record, remoteUrl, repoName: basename(cwd) }, creds, fetchImpl)
+    return { status: 'pushed', deduplicated: result.deduplicated }
+  } catch (err) {
+    return { status: 'failed', message: err instanceof Error ? err.message : String(err) }
+  }
+}
+
 export async function linkWorkspace(
   code: string,
   creds: SyncCredentials,

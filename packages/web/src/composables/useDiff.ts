@@ -12,6 +12,8 @@ export type Finding = {
   title?: string
   message: string
   suggestion?: string
+  /** Dual review: true when both independent reviewers raised this finding. */
+  consensus?: boolean
   /** UI-assigned global index (position in record.review.findings), not part of the contract. */
   id?: number
 }

@@ -201,6 +201,9 @@ function richParts(s: string): { text: string; isCode: boolean }[] {
           <div class="fv-item-body">
             <div class="fv-item-top">
               <span class="fv-sev" :class="SEV_META[f.severity].cls">{{ $t(SEV_META[f.severity].labelKey) }}</span>
+              <span v-if="f.consensus" class="fv-consensus" :title="$t('finding.consensus')">
+                <span class="fv-consensus-dots" aria-hidden="true"><span /><span /></span>
+              </span>
               <span class="fv-item-title">{{ f.title ?? f.message }}</span>
             </div>
             <code class="fv-item-file">{{ f.file }}<template v-if="f.line">:{{ f.line }}</template></code>
@@ -250,6 +253,10 @@ function richParts(s: string): { text: string; isCode: boolean }[] {
         <div class="fv-note-head">
           <span class="fv-sev" :class="SEV_META[current.severity].cls">{{ $t(SEV_META[current.severity].labelKey) }}</span>
           <span v-if="current.kind && KIND_LABEL[current.kind]" class="fv-kind">{{ $t(KIND_LABEL[current.kind]!) }}</span>
+          <span v-if="current.consensus" class="fv-consensus fv-consensus--pill">
+            <span class="fv-consensus-dots" aria-hidden="true"><span /><span /></span>
+            {{ $t('finding.consensus') }}
+          </span>
           <code class="fv-note-file">{{ current.file }}<template v-if="current.line">:{{ current.line }}</template></code>
         </div>
         <p v-if="current.title" class="fv-note-title">
@@ -473,6 +480,49 @@ function richParts(s: string): { text: string; isCode: boolean }[] {
 .fv-sev--info {
   color: var(--codesema-ink-3);
   background: var(--codesema-line-2);
+}
+
+.fv-consensus {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--codesema-risk-low);
+}
+
+.fv-consensus--pill {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 2px 9px;
+  background: var(--codesema-risk-low-soft);
+}
+
+.fv-consensus-dots {
+  position: relative;
+  width: 11px;
+  height: 8px;
+  flex-shrink: 0;
+}
+
+.fv-consensus-dots span {
+  position: absolute;
+  top: 1px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.fv-consensus-dots span:first-child {
+  left: 0;
+}
+
+.fv-consensus-dots span:last-child {
+  left: 5px;
+  opacity: 0.65;
 }
 
 .fv-list-foot {

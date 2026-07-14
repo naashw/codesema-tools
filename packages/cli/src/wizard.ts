@@ -25,6 +25,8 @@ export type AgentDef = {
   modelFlag: string
   /** Suggested models (free text entry is always possible). */
   models: string[]
+  /** Mid-tier model used for the dual review judge. */
+  judgeModel: string
   effortFlag?: (value: string) => string
   efforts?: string[]
 }
@@ -40,6 +42,7 @@ export const AGENT_DEFS: AgentDef[] = [
     base: 'claude -p',
     modelFlag: '--model',
     models: ['fable', 'opus', 'sonnet', 'haiku'],
+    judgeModel: 'sonnet',
     effortFlag: (v) => `--effort ${v}`,
     efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
   },
@@ -51,6 +54,7 @@ export const AGENT_DEFS: AgentDef[] = [
     suffix: '-',
     modelFlag: '-m',
     models: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4-mini'],
+    judgeModel: 'gpt-5.5',
     effortFlag: (v) => `-c model_reasoning_effort=${v}`,
     efforts: ['minimal', 'low', 'medium', 'high', 'xhigh'],
   },
@@ -61,6 +65,7 @@ export const AGENT_DEFS: AgentDef[] = [
     base: 'gemini',
     modelFlag: '-m',
     models: ['gemini-3-pro-preview', 'gemini-2.5-pro', 'gemini-2.5-flash'],
+    judgeModel: 'gemini-2.5-pro',
     // no CLI effort flag: gemini only supports it via settings.json
   },
 ]

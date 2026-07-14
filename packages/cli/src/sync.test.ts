@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { loadGlobalConfig, saveGlobalConfig } from './config.js'
 import {
+  autoPushReview,
   createWorkspace,
   deleteWorkspaceData,
   linkWorkspace,
@@ -105,6 +106,48 @@ describe('sync http client', () => {
     await expect(createWorkspace(fetchStub(200, { workspace_id: '', secret: '' }, []))).rejects.toThrow(
       'unexpected response from',
     )
+  })
+
+  test('autoPushReview: disabled without stored credentials, no request goes out', async () => {
+    const calls: Call[] = []
+    const outcome = await autoPushReview(record, configDir, fetchStub(200, {}, calls))
+    expect(outcome).toEqual({ status: 'disabled' })
+    expect(calls).toHaveLength(0)
+  })
+
+  test('autoPushReview: pushes the fresh review with the workspace bearer token', async () => {
+    saveGlobalConfig({ syncWorkspaceId: 'ws-1', syncSecret: 's3cret' })
+    const calls: Call[] = []
+    const outcome = await autoPushReview(
+      record,
+      configDir,
+      fetchStub(200, { review_id: 'r1', deduplicated: false }, calls),
+    )
+    expect(outcome).toEqual({ status: 'pushed', deduplicated: false })
+    expect(calls[0]!.url).toContain('/api/cli/reviews')
+    const headers = calls[0]!.init.headers as Record<string, string>
+    expect(headers.authorization).toBe('Bearer csk_ws-1.s3cret')
+  })
+
+  test('autoPushReview: reports dedup when the server already holds the review', async () => {
+    saveGlobalConfig({ syncWorkspaceId: 'ws-1', syncSecret: 's3cret' })
+    const outcome = await autoPushReview(record, configDir, fetchStub(200, { review_id: 'r1', deduplicated: true }, []))
+    expect(outcome).toEqual({ status: 'pushed', deduplicated: true })
+  })
+
+  test('autoPushReview: a diff carrying a secret is held back, nothing leaves the machine', async () => {
+    saveGlobalConfig({ syncWorkspaceId: 'ws-1', syncSecret: 's3cret' })
+    const calls: Call[] = []
+    const secretDiff = 'diff --git a/.env b/.env\n--- a/.env\n+++ b/.env\n@@ -0,0 +1 @@\n+AWS_SECRET=1\n'
+    const outcome = await autoPushReview({ ...record, diff: secretDiff }, configDir, fetchStub(200, {}, calls))
+    expect(outcome.status).toBe('blocked_secrets')
+    expect(calls).toHaveLength(0)
+  })
+
+  test('autoPushReview: a server failure reports without throwing', async () => {
+    saveGlobalConfig({ syncWorkspaceId: 'ws-1', syncSecret: 's3cret' })
+    const outcome = await autoPushReview(record, configDir, fetchStub(500, { error: 'boom' }, []))
+    expect(outcome).toEqual({ status: 'failed', message: 'boom' })
   })
 
   test('pushReview sends the bearer token and the ingest payload', async () => {

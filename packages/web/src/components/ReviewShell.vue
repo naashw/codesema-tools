@@ -241,6 +241,9 @@ const SEV_CLS: Record<string, string> = {
           <span class="sr-branch-arrow">→</span>
           <code>{{ meta.target }}</code>
         </div>
+        <p v-if="meta.dual" class="sr-dual-stat codesema-muted">
+          {{ $t('reviews.dualStat', { merged: meta.dual.merged, rejected: meta.dual.rejected, added: meta.dual.added_by_b }) }}
+        </p>
       </div>
       <button
         v-if="actionableCount > 0"
@@ -352,6 +355,10 @@ const SEV_CLS: Record<string, string> = {
               <ul class="sr-general-list">
                 <li v-for="(f, i) in unmatched" :key="i" class="sr-general-item">
                   <span class="sr-sev" :class="SEV_CLS[f.severity] ?? 'sr-sev--info'">{{ f.severity }}</span>
+                  <span v-if="f.consensus" class="sr-consensus" :title="$t('finding.consensus')">
+                    <span class="sr-consensus-dots" aria-hidden="true"><span /><span /></span>
+                    {{ $t('finding.consensus') }}
+                  </span>
                   <code v-if="f.file" class="sr-general-file">{{ f.file }}<template v-if="f.line">:{{ f.line }}</template></code>
                   {{ f.message }}
                   <pre v-if="f.suggestion" class="sr-general-sugg">{{ f.suggestion }}</pre>
@@ -522,6 +529,11 @@ const SEV_CLS: Record<string, string> = {
 
 .sr-branch-arrow {
   color: var(--codesema-ink-3);
+}
+
+.sr-dual-stat {
+  font-size: 11.5px;
+  margin: 2px 0 0;
 }
 
 .sr-verdict-group {
@@ -828,6 +840,46 @@ const SEV_CLS: Record<string, string> = {
 
 .sr-sev--info {
   color: var(--codesema-ink-3);
+}
+
+.sr-consensus {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 1px 8px;
+  margin-right: 8px;
+  color: var(--codesema-risk-low);
+  background: var(--codesema-risk-low-soft);
+}
+
+.sr-consensus-dots {
+  position: relative;
+  width: 11px;
+  height: 8px;
+  flex-shrink: 0;
+}
+
+.sr-consensus-dots span {
+  position: absolute;
+  top: 1px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.sr-consensus-dots span:first-child {
+  left: 0;
+}
+
+.sr-consensus-dots span:last-child {
+  left: 5px;
+  opacity: 0.65;
 }
 
 .sr-general-file {

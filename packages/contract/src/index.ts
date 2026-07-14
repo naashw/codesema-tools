@@ -54,6 +54,8 @@ export type Finding = {
   title?: string
   message: string
   suggestion?: string
+  /** Dual review: true when both independent reviewers raised this finding. */
+  consensus?: boolean
 }
 
 export type SanitizedReview = {
@@ -61,6 +63,14 @@ export type SanitizedReview = {
   summary: string
   findings: Finding[]
   narrative: ReviewNarrative | null
+  /** Diff files the reviewer claims to have examined, for coverage reporting. */
+  files_reviewed?: string[]
+}
+
+export type DualStats = {
+  merged: number
+  rejected: number
+  added_by_b: number
 }
 
 export type ReviewRecord = {
@@ -74,6 +84,8 @@ export type ReviewRecord = {
     head_sha?: string
     repo_root: string
     created_at: string
+    /** Present when the review was produced by a dual (two reviewers + judge) run. */
+    dual?: DualStats
   }
   commits: string[]
   diff: string
@@ -202,10 +214,15 @@ export function sanitizeFindings(raw: unknown): Finding[] {
     const file = typeof f.file === 'string' ? f.file.trim().slice(0, FILE_MAX) : ''
     const message = typeof f.message === 'string' ? f.message.trim().slice(0, MESSAGE_MAX) : ''
     if (!file || !message) continue
-    const severity: FindingSeverity = SEVERITIES.includes(f.severity as FindingSeverity)
-      ? (f.severity as FindingSeverity)
-      : 'info'
     const kind = KINDS.includes(f.kind as FindingKind) ? (f.kind as FindingKind) : undefined
+    // A praise/why finding carries no defect: any higher severity would trip
+    // the verdict escalation and the --fail-on gate.
+    const severity: FindingSeverity =
+      kind === 'praise' || kind === 'why'
+        ? 'info'
+        : SEVERITIES.includes(f.severity as FindingSeverity)
+          ? (f.severity as FindingSeverity)
+          : 'info'
     const line = Number.isInteger(f.line) && (f.line as number) > 0 ? (f.line as number) : undefined
     const endLine =
       line !== undefined && Number.isInteger(f.endLine) && (f.endLine as number) >= line
@@ -223,9 +240,25 @@ export function sanitizeFindings(raw: unknown): Finding[] {
       ...(endLine !== undefined ? { endLine } : {}),
       ...(title !== undefined ? { title } : {}),
       ...(suggestion !== undefined ? { suggestion } : {}),
+      ...(f.consensus === true ? { consensus: true } : {}),
     })
   }
   return out
+}
+
+const FILES_REVIEWED_MAX = 500
+
+function sanitizeFilesReviewed(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const seen = new Set<string>()
+  for (const item of raw) {
+    if (typeof item !== 'string') continue
+    const path = item.trim().slice(0, FILE_MAX)
+    if (!path) continue
+    seen.add(path)
+    if (seen.size >= FILES_REVIEWED_MAX) break
+  }
+  return [...seen]
 }
 
 export function sanitizeReview(raw: unknown): SanitizedReview {
@@ -235,7 +268,8 @@ export function sanitizeReview(raw: unknown): SanitizedReview {
   const summary = typeof r.summary === 'string' ? r.summary.trim().slice(0, MESSAGE_MAX) : ''
   const findings = sanitizeFindings(r.findings)
   const narrative = sanitizeNarrative(r.narrative, findings.length)
-  return { verdict, summary, findings, narrative }
+  const files_reviewed = sanitizeFilesReviewed(r.files_reviewed)
+  return { verdict, summary, findings, narrative, ...(files_reviewed !== undefined ? { files_reviewed } : {}) }
 }
 
 /**
@@ -243,11 +277,20 @@ export function sanitizeReview(raw: unknown): SanitizedReview {
  * hand-edited, or written by an older schema). Returns null when the input is not
  * a usable object; shape fields are normalized.
  */
+function sanitizeDualStats(raw: unknown): DualStats | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const d = raw as Record<string, unknown>
+  const counts = [d.merged, d.rejected, d.added_by_b]
+  if (!counts.every((n) => Number.isInteger(n) && (n as number) >= 0)) return undefined
+  return { merged: d.merged as number, rejected: d.rejected as number, added_by_b: d.added_by_b as number }
+}
+
 export function sanitizeRecord(raw: unknown): ReviewRecord | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
   const m = (r.meta && typeof r.meta === 'object' ? r.meta : {}) as Record<string, unknown>
   const str = (v: unknown): string => (typeof v === 'string' ? v : '')
+  const dual = sanitizeDualStats(m.dual)
   const meta: ReviewRecord['meta'] = {
     title: str(m.title),
     branch: str(m.branch),
@@ -256,6 +299,7 @@ export function sanitizeRecord(raw: unknown): ReviewRecord | null {
     ...(typeof m.head_sha === 'string' && m.head_sha ? { head_sha: m.head_sha } : {}),
     repo_root: str(m.repo_root),
     created_at: typeof m.created_at === 'string' && m.created_at ? m.created_at : new Date().toISOString(),
+    ...(dual !== undefined ? { dual } : {}),
   }
   const commits = Array.isArray(r.commits) ? r.commits.filter((c): c is string => typeof c === 'string') : []
   const diff = typeof r.diff === 'string' ? r.diff : ''
@@ -356,6 +400,134 @@ export function detectDiffSecrets(diff: string): SecretMatch[] {
   return matches
 }
 
+export type GroundingReport = {
+  dropped: Finding[]
+  deanchored: Finding[]
+  merged: number
+  verdict_escalated: boolean
+}
+
+const SEVERITY_ORDER: Record<FindingSeverity, number> = { info: 0, minor: 1, major: 2, critical: 3 }
+
+type DiffIndex = { files: Set<string>; hunks: Map<string, [number, number][]> }
+
+function indexDiff(diff: string): DiffIndex | null {
+  const files = new Set<string>()
+  const hunks = new Map<string, [number, number][]>()
+  let currentNewPath = ''
+  for (const line of diff.split('\n')) {
+    if (line.startsWith('diff --git ')) {
+      currentNewPath = ''
+      const path = gitHeaderNewPath(line)
+      if (path) files.add(path)
+      continue
+    }
+    if (line.startsWith('--- ') || line.startsWith('+++ ')) {
+      const path = markerLinePath(line)
+      if (path) files.add(path)
+      if (line.startsWith('+++ ')) currentNewPath = path
+      continue
+    }
+    const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line)
+    if (hunk && currentNewPath) {
+      const start = Number(hunk[1])
+      const count = hunk[2] === undefined ? 1 : Number(hunk[2])
+      if (count > 0) {
+        const ranges = hunks.get(currentNewPath) ?? []
+        ranges.push([start, start + count - 1])
+        hunks.set(currentNewPath, ranges)
+      }
+    }
+  }
+  return files.size > 0 ? { files, hunks } : null
+}
+
+function lineInHunks(ranges: [number, number][] | undefined, line: number): boolean {
+  return (ranges ?? []).some(([start, end]) => line >= start && line <= end)
+}
+
+/**
+ * Deterministic post-check of an agent review against the reviewed diff:
+ * findings on files absent from the diff are dropped, line anchors outside
+ * every hunk are removed (new-file numbering), duplicates (same file, line
+ * and kind) merge into the first, keeping the highest severity and the
+ * consensus flag of either copy, and an approve verdict cannot survive a
+ * critical finding. Narrative finding_refs are
+ * remapped accordingly. Never throws; an unparseable diff returns the
+ * review untouched.
+ */
+export function groundReview(
+  review: SanitizedReview,
+  diff: string,
+): { review: SanitizedReview; report: GroundingReport } {
+  const report: GroundingReport = { dropped: [], deanchored: [], merged: 0, verdict_escalated: false }
+  const index = typeof diff === 'string' ? indexDiff(diff) : null
+  if (!index) return { review, report }
+
+  const newIndexByOld = new Map<number, number>()
+  const keptIndexByKey = new Map<string, number>()
+  const findings: Finding[] = []
+  review.findings.forEach((finding, oldIndex) => {
+    if (!index.files.has(finding.file)) {
+      report.dropped.push(finding)
+      return
+    }
+    let kept = finding
+    const ranges = index.hunks.get(finding.file)
+    if (kept.line !== undefined && !lineInHunks(ranges, kept.line)) {
+      const { line: _line, endLine: _endLine, ...rest } = kept
+      kept = rest
+      report.deanchored.push(finding)
+    } else if (kept.endLine !== undefined && !lineInHunks(ranges, kept.endLine)) {
+      const { endLine: _endLine, ...rest } = kept
+      kept = rest
+    }
+    if (kept.line !== undefined) {
+      const key = `${kept.file}\0${kept.line}\0${kept.kind ?? ''}`
+      const duplicateOf = keptIndexByKey.get(key)
+      if (duplicateOf !== undefined) {
+        report.merged++
+        const first = findings[duplicateOf] as Finding
+        const severity = SEVERITY_ORDER[kept.severity] > SEVERITY_ORDER[first.severity] ? kept.severity : first.severity
+        const consensus = first.consensus === true || kept.consensus === true
+        findings[duplicateOf] = { ...first, severity, ...(consensus ? { consensus: true } : {}) }
+        newIndexByOld.set(oldIndex, duplicateOf)
+        return
+      }
+      keptIndexByKey.set(key, findings.length)
+    }
+    newIndexByOld.set(oldIndex, findings.length)
+    findings.push(kept)
+  })
+
+  let narrative = review.narrative
+  if (narrative && (report.dropped.length > 0 || report.merged > 0)) {
+    narrative = {
+      ...narrative,
+      steps: narrative.steps.map((step) => {
+        const seen = new Set<number>()
+        const finding_refs: number[] = []
+        for (const ref of step.finding_refs) {
+          const mapped = newIndexByOld.get(ref)
+          if (mapped !== undefined && !seen.has(mapped)) {
+            seen.add(mapped)
+            finding_refs.push(mapped)
+          }
+        }
+        return { ...step, finding_refs }
+      }),
+    }
+  }
+
+  let verdict = review.verdict
+  if (verdict === 'approve' && findings.some((f) => f.severity === 'critical')) {
+    verdict = 'request_changes'
+    report.verdict_escalated = true
+  }
+
+  return { review: { ...review, verdict, findings, narrative }, report }
+}
+
 const RISK_ENUM = { enum: ['high', 'medium', 'low'] } as const
 
 /** JSON Schema (draft 2020-12) for a ReviewRecord, for consumers validating synced reviews. */
@@ -380,6 +552,16 @@ export const reviewRecordSchema = {
         head_sha: { type: 'string' },
         repo_root: { type: 'string' },
         created_at: { type: 'string' },
+        dual: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['merged', 'rejected', 'added_by_b'],
+          properties: {
+            merged: { type: 'integer', minimum: 0 },
+            rejected: { type: 'integer', minimum: 0 },
+            added_by_b: { type: 'integer', minimum: 0 },
+          },
+        },
       },
     },
     commits: { type: 'array', items: { type: 'string' } },
@@ -396,6 +578,7 @@ export const reviewRecordSchema = {
         summary: { type: 'string' },
         findings: { type: 'array', items: { $ref: '#/$defs/finding' } },
         narrative: { anyOf: [{ type: 'null' }, { $ref: '#/$defs/narrative' }] },
+        files_reviewed: { type: 'array', items: { type: 'string' } },
       },
     },
     finding: {
@@ -411,6 +594,7 @@ export const reviewRecordSchema = {
         title: { type: 'string' },
         message: { type: 'string' },
         suggestion: { type: 'string' },
+        consensus: { type: 'boolean' },
       },
     },
     narrative: {

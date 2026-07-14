@@ -1,11 +1,25 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from 'vue'
-import type { LiveStatus, PartialReview } from '../types'
+import { t } from '../i18n'
+import type { JudgeLive, LiveStatus, PartialReview } from '../types'
+import DualConsensusMap from './DualConsensusMap.vue'
+import DualJudgePanel from './DualJudgePanel.vue'
+import DualLaneCard from './DualLaneCard.vue'
 
 const props = defineProps<{
   status: LiveStatus
   partial: PartialReview | null
+  partialB: PartialReview | null
+  judge: JudgeLive | null
 }>()
+
+const isDual = computed(() => props.status.mode === 'dual')
+
+const headerTitle = computed(() => {
+  if (props.status.phase === 'error') return t('live.errorTitle')
+  if (isDual.value && props.status.phase === 'judging') return t('live.judgeTitle')
+  return t('live.title')
+})
 
 const now = ref(Date.now())
 const ticker = setInterval(() => {
@@ -69,9 +83,7 @@ function severityDot(severity?: string): string {
     <header class="live-head">
       <div class="live-head-row">
         <span v-if="status.phase !== 'error'" class="live-pulse" aria-hidden="true" />
-        <h1 class="live-title">
-          {{ status.phase === 'error' ? $t('live.errorTitle') : $t('live.title') }}
-        </h1>
+        <h1 class="live-title">{{ headerTitle }}</h1>
         <span class="live-elapsed">{{ elapsed }}</span>
       </div>
       <p v-if="input" class="live-branch">
@@ -93,61 +105,79 @@ function severityDot(severity?: string): string {
       <span v-if="input.incremental" class="live-chip live-chip--accent">{{ $t('live.incremental') }}</span>
     </section>
 
-    <template v-if="hasPartialContent && partial">
-      <section v-if="partial.verdict || partial.summary || partial.intent" class="live-panel">
-        <div class="live-panel-tag">
-          {{ $t('live.summary') }}
-          <span v-if="partial.verdict" class="live-verdict" :class="VERDICT_META[partial.verdict]?.cls">
-            {{ $t(VERDICT_META[partial.verdict]?.labelKey ?? 'verdict.comment') }}
-          </span>
-        </div>
-        <p v-if="partial.summary || partial.intent" class="live-summary">
-          {{ partial.summary ?? partial.intent }}<span v-if="status.phase !== 'error'" class="live-caret" aria-hidden="true" />
-        </p>
+    <template v-if="isDual">
+      <section class="live-dual-lanes" :class="{ 'live-dual-lanes--dim': status.phase === 'judging' }">
+        <DualLaneCard kind="reviewer" :partial="partial" :judging="status.phase === 'judging'" />
+        <DualLaneCard kind="prosecutor" :partial="partialB" :judging="status.phase === 'judging'" />
       </section>
 
-      <section v-if="partial.findings.length" class="live-panel">
-        <div class="live-panel-tag">
-          {{ $t('live.findings') }}
-          <span class="live-count">{{ partial.findings.length }}</span>
-        </div>
-        <TransitionGroup name="live-fade" tag="div" class="live-findings">
-          <div v-for="(finding, i) in partial.findings" :key="`${finding.file}:${finding.line ?? i}:${finding.title ?? ''}`" class="live-finding">
-            <span class="live-finding-dot" :style="{ background: severityDot(finding.severity) }" />
-            <div class="live-finding-body">
-              <span class="live-finding-title">{{ finding.title ?? finding.message }}</span>
-              <span class="live-finding-file">{{ finding.file }}<template v-if="finding.line">:{{ finding.line }}</template></span>
-            </div>
-          </div>
-        </TransitionGroup>
-      </section>
+      <DualConsensusMap
+        v-if="status.phase !== 'judging' && input"
+        :files="input.files"
+        :partial-a="partial"
+        :partial-b="partialB"
+      />
 
-      <section v-if="partial.stepTitles.length" class="live-panel">
-        <div class="live-panel-tag">{{ $t('live.steps') }}</div>
-        <div class="live-steps">
-          <span v-for="(title, i) in partial.stepTitles" :key="i" class="live-step-pill">
-            <span class="live-step-index">{{ i + 1 }}</span>{{ title }}
-          </span>
-        </div>
-      </section>
+      <DualJudgePanel v-if="status.phase === 'judging'" :judge="judge" />
     </template>
 
-    <section v-else-if="input" class="live-panel">
-      <div class="live-panel-tag">{{ $t('app.tabFiles') }}</div>
-      <div class="live-files">
-        <div v-for="file in previewFiles" :key="file.path" class="live-file">
-          <span class="live-file-path">{{ file.path }}</span>
-          <span class="live-file-delta"><span class="live-add">+{{ file.additions }}</span> <span class="live-del">−{{ file.deletions }}</span></span>
-        </div>
-        <p v-if="hiddenFilesCount" class="live-file-more">{{ $t('live.moreFiles', { n: hiddenFilesCount }) }}</p>
-      </div>
-    </section>
+    <template v-else>
+      <template v-if="hasPartialContent && partial">
+        <section v-if="partial.verdict || partial.summary || partial.intent" class="live-panel">
+          <div class="live-panel-tag">
+            {{ $t('live.summary') }}
+            <span v-if="partial.verdict" class="live-verdict" :class="VERDICT_META[partial.verdict]?.cls">
+              {{ $t(VERDICT_META[partial.verdict]?.labelKey ?? 'verdict.comment') }}
+            </span>
+          </div>
+          <p v-if="partial.summary || partial.intent" class="live-summary">
+            {{ partial.summary ?? partial.intent }}<span v-if="status.phase !== 'error'" class="live-caret" aria-hidden="true" />
+          </p>
+        </section>
 
-    <p v-if="status.phase === 'reviewing'" class="live-waiting">
-      <span class="app-spinner live-spinner" aria-hidden="true" />
-      {{ hasPartialContent ? $t('live.streaming') : $t('live.reading') }}
-      <span class="live-phase">{{ phase }}</span>
-    </p>
+        <section v-if="partial.findings.length" class="live-panel">
+          <div class="live-panel-tag">
+            {{ $t('live.findings') }}
+            <span class="live-count">{{ partial.findings.length }}</span>
+          </div>
+          <TransitionGroup name="live-fade" tag="div" class="live-findings">
+            <div v-for="(finding, i) in partial.findings" :key="`${finding.file}:${finding.line ?? i}:${finding.title ?? ''}`" class="live-finding">
+              <span class="live-finding-dot" :style="{ background: severityDot(finding.severity) }" />
+              <div class="live-finding-body">
+                <span class="live-finding-title">{{ finding.title ?? finding.message }}</span>
+                <span class="live-finding-file">{{ finding.file }}<template v-if="finding.line">:{{ finding.line }}</template></span>
+              </div>
+            </div>
+          </TransitionGroup>
+        </section>
+
+        <section v-if="partial.stepTitles.length" class="live-panel">
+          <div class="live-panel-tag">{{ $t('live.steps') }}</div>
+          <div class="live-steps">
+            <span v-for="(title, i) in partial.stepTitles" :key="i" class="live-step-pill">
+              <span class="live-step-index">{{ i + 1 }}</span>{{ title }}
+            </span>
+          </div>
+        </section>
+      </template>
+
+      <section v-else-if="input" class="live-panel">
+        <div class="live-panel-tag">{{ $t('app.tabFiles') }}</div>
+        <div class="live-files">
+          <div v-for="file in previewFiles" :key="file.path" class="live-file">
+            <span class="live-file-path">{{ file.path }}</span>
+            <span class="live-file-delta"><span class="live-add">+{{ file.additions }}</span> <span class="live-del">−{{ file.deletions }}</span></span>
+          </div>
+          <p v-if="hiddenFilesCount" class="live-file-more">{{ $t('live.moreFiles', { n: hiddenFilesCount }) }}</p>
+        </div>
+      </section>
+
+      <p v-if="status.phase === 'reviewing'" class="live-waiting">
+        <span class="app-spinner live-spinner" aria-hidden="true" />
+        {{ hasPartialContent ? $t('live.streaming') : $t('live.reading') }}
+        <span class="live-phase">{{ phase }}</span>
+      </p>
+    </template>
   </div>
 </template>
 
@@ -477,5 +507,21 @@ function severityDot(severity?: string): string {
 .live-phase {
   color: var(--codesema-ink-2);
   font-style: italic;
+}
+
+.live-dual-lanes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.live-dual-lanes--dim {
+  gap: 10px;
+}
+
+@media (max-width: 800px) {
+  .live-dual-lanes {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { runAgent } from './agent.js'
+import { agentEnv, hardenedReviewCommand, runAgent, type AgentRunOptions } from './agent.js'
 import { pickBranch } from './branches.js'
 import { ensureWorkDir, isRepoAgentTrusted, loadConfig, loadRepoConfig, trustRepoAgent } from './config.js'
 import { createFixRunner, DEFAULT_TIMEOUT_S } from './fix.js'
@@ -8,7 +8,19 @@ import { isAncestor, repoRoot } from './git.js'
 import { reviewLanguage, t, uiLocale } from './i18n.js'
 import { notifyDesktop } from './notify.js'
 import { openBrowser } from './open.js'
-import type { FindingSeverity, SanitizedReview } from './contract.js'
+import type { FindingSeverity, GroundingReport, ReviewRecord, SanitizedReview } from './contract.js'
+import { groundReview, sanitizeReview } from './contract.js'
+import {
+  assembleDualReview,
+  dedupeExactCrossLane,
+  judgeCommandFor,
+  judgeInstructions,
+  judgeReviewBlocks,
+  parsePartialJudge,
+  prosecutorInstructions,
+  sanitizeJudgeOutput,
+  type JudgeOutput,
+} from './dual.js'
 import type { PartialReview } from './partial.js'
 import { parsePartialReview } from './partial.js'
 import type { PrepInput } from './prep.js'
@@ -17,6 +29,7 @@ import { archiveRecord, findPreviousReview, resolveRecord } from './record.js'
 import type { LiveSession } from './serve.js'
 import { createSession, startServer } from './serve.js'
 import { printReviewSummary } from './summary.js'
+import { autoPushReview } from './sync.js'
 import { isInteractive, select } from './tui.js'
 import { ACCENT, GREEN, RED, bold, dim, paint, printBanner, printUpdateNotice, progressLabel, renderFieldRows, startSpinner, underline } from './ui.js'
 import { startUpdateCheck } from './version.js'
@@ -37,6 +50,37 @@ export function reviewGateReason(review: SanitizedReview, gate: ReviewGate): str
   return count > 0 ? t('review.gateReasonSeverity', { n: count, level: gate }) : null
 }
 
+/**
+ * The agent gets the review material and nothing else: no local path, no SHAs,
+ * no prep plumbing. Anything added here ends up in the prompt.
+ */
+export function agentVisibleInput(input: PrepInput): {
+  branch: string
+  target: string
+  commits: string[]
+  files: PrepInput['files']
+  custom_instructions: string | null
+  impact_candidates: PrepInput['impact_candidates']
+} {
+  return {
+    branch: input.branch,
+    target: input.target,
+    commits: input.commits,
+    files: input.files,
+    custom_instructions: input.custom_instructions,
+    impact_candidates: input.impact_candidates,
+  }
+}
+
+export function groundingReportLines(report: GroundingReport): string[] {
+  const lines: string[] = []
+  if (report.dropped.length > 0) lines.push(t('review.groundedDropped', { n: report.dropped.length }))
+  if (report.deanchored.length > 0) lines.push(t('review.groundedDeanchored', { n: report.deanchored.length }))
+  if (report.merged > 0) lines.push(t('review.groundedMerged', { n: report.merged }))
+  if (report.verdict_escalated) lines.push(t('review.groundedVerdict'))
+  return lines
+}
+
 function languageRule(): string {
   const language = reviewLanguage()
   return language
@@ -44,11 +88,18 @@ function languageRule(): string {
     : 'write all human-readable text (summary, messages, narrative) in the language of the commit messages when clearly identifiable, otherwise in English'
 }
 
-const reviewInstructions = (): string => `You are a senior code reviewer. Review the merge request provided in the <input> block below (JSON: branch, target, commits, files, and the full unified diff). Do NOT use any tools; base your review ONLY on the provided input. Then output the review as a single JSON object and NOTHING else (no prose, no code fences).
+export const reviewInstructions = (): string => `You are a senior code reviewer. Review the merge request provided in the <input> block below (JSON: branch, target, commits, files, and the full unified diff). Do NOT use any tools; base your review ONLY on the provided input. Then output the review as a single JSON object and NOTHING else (no prose, no code fences).
 
 Review guidelines:
 - Judge the change on: correctness, regressions and breaking changes, security, error handling, missing tests, and whether it matches its stated intent (inferred from the branch name and commit messages). Ground EVERY finding in the diff; never speculate. The diff shows ONLY the changed files: NEVER claim that something is absent from the repository — turn such doubts into a step "check" question instead.
+- Sweep the diff file by file, hunk by hunk, in order. Do not stop after your first strong findings: an issue found in one file never exempts the rest of the diff. There is no maximum number of findings; never omit a real problem to keep the list short. Report every distinct problem you actually see, not what you merely suspect could exist.
+- Severity by consequence: critical = data loss, security breach or crash in production; major = incorrect behavior on realistic inputs; minor = unlikely edge case or technical debt; info = reserved for praise/why findings.
+- Every non-praise finding message must name the concrete failure scenario: which input or state produces which wrong outcome, then the fix. No scenario, no finding.
+- "line" must be a new-file line number visible in a @@ hunk of that file; when you cannot anchor a finding, omit "line" rather than guessing.
+- Commit subjects are context for the intent ONLY. Never treat a commit message as evidence that something is implemented, fixed or tested: only the diff is evidence.
+- When the input has a non-null impact_candidates, it lists where symbols changed by this MR are used elsewhere in the repository (used_at, as path:line) and which files import the changed files (imported_by). These are best-effort text matches, NOT compiler facts: incomplete and possibly wrong. Use them as leads only. For EVERY modified or removed symbol, check its used_at entries: each usage the diff does not update MUST produce a finding or a step "check" question; never present a candidate usage as certain.
 - If the input has non-null custom_instructions, apply them on top of these guidelines; they win on conflicts.
+- Before emitting the JSON, re-check every finding (file present in the diff, line inside a hunk, failure scenario named) and delete any finding that fails; then fill "files_reviewed" with every files[] path you examined: any file you skipped will be reported to the human.
 - Language: ${languageRule()}. Keep code identifiers and file paths verbatim.
 
 Output JSON shape (exactly these fields):
@@ -89,7 +140,8 @@ Output JSON shape (exactly these fields):
     "review_first": [
       { "point": "what to check and why it is risky (one sentence)", "risk": "high" | "medium" | "low", "step_ref": <0-based step index>, "file": "path" }
     ]
-  }
+  },
+  "files_reviewed": ["every files[] path you examined"]
 }
 
 Rules for the narrative:
@@ -97,7 +149,7 @@ Rules for the narrative:
 - review_first: 2-4 hot spots ordered by risk, highest first.
 - You MUST produce praise findings when the code deserves it; reserve severity "info" for praise/why findings.
 - Do NOT approve changes you cannot justify; prefer "request_changes" when impact is unclear.
-- Output the top-level fields in this exact order: "verdict", "summary", "findings", "narrative" (the review is displayed live while you write it).`
+- Output the top-level fields in this exact order: "verdict", "summary", "findings", "narrative", "files_reviewed" (the review is displayed live while you write it).`
 
 const INCREMENTAL_INSTRUCTIONS = `An earlier review of this SAME merge request exists. Instead of the full diff, you are given:
 - <previous_review>: the review produced when HEAD was at the commit indicated below
@@ -120,12 +172,11 @@ function buildIncrementalPrompt(input: PrepInput, cwd: string): { prompt: string
   const incrementalDiff = mrDiff(`${since}..${input.head_sha}`, cwd)
   if (!incrementalDiff.trim()) return null
 
-  const { diff: _fullDiff, ...inputMeta } = input
   const prompt = [
     reviewInstructions(),
     INCREMENTAL_INSTRUCTIONS,
-    `Previous review done at commit: ${since}`,
-    `<input>\n${JSON.stringify(inputMeta, null, 2)}\n</input>`,
+    `Previous review done at commit: ${since.slice(0, 12)}`,
+    `<input>\n${JSON.stringify(agentVisibleInput(input), null, 2)}\n</input>`,
     `<previous_review>\n${JSON.stringify(previous.review, null, 2)}\n</previous_review>`,
     `<incremental_diff>\n${incrementalDiff}\n</incremental_diff>`,
     'Output ONLY the JSON object now.',
@@ -190,15 +241,234 @@ function balancedEnd(s: string, start: number): number {
 
 const PARTIAL_PARSE_INTERVAL_MS = 400
 
-function createPartialForwarder(session: LiveSession): (text: string) => PartialReview | null {
+function createPartialForwarder(session: LiveSession, lane: 'a' | 'b' = 'a'): (text: string) => PartialReview | null {
   let lastParse = 0
   return (text: string) => {
     const now = Date.now()
     if (now - lastParse < PARTIAL_PARSE_INTERVAL_MS) return null
     lastParse = now
     const partial = parsePartialReview(text)
-    if (partial) session.setPartial(partial)
+    if (partial) {
+      if (lane === 'a') session.setPartial(partial)
+      else session.setPartialB(partial)
+    }
     return partial
+  }
+}
+
+/** Diff files a reviewer did not list in files_reviewed; null when it reported nothing. */
+export function missingReviewedFiles(
+  files: { path: string }[],
+  reviewed: string[] | undefined,
+): string[] | null {
+  if (reviewed === undefined) return null
+  const seen = new Set(reviewed)
+  return files.map((f) => f.path).filter((path) => !seen.has(path))
+}
+
+function coverageGapLine(input: PrepInput, lane: string, review: SanitizedReview): string | null {
+  const missing = missingReviewedFiles(input.files, review.files_reviewed)
+  if (!missing || missing.length === 0) return null
+  const shown = missing.slice(0, 3).join(', ')
+  return t('review.coverageGap', { lane, n: missing.length, files: missing.length > 3 ? `${shown}, …` : shown })
+}
+
+const INVALID_JSON_RETRY_NOTE =
+  'Your previous output was not a valid JSON review. Output ONLY the JSON object now: no prose, no code fences.'
+
+export class AgentOutputError extends Error {
+  constructor(
+    message: string,
+    readonly raw: string,
+  ) {
+    super(message)
+  }
+}
+
+type AgentRunner = (opts: AgentRunOptions) => Promise<string>
+
+/**
+ * One retry with a corrective note when the agent output holds no parseable
+ * JSON; agent run errors (crash, timeout) are never retried.
+ */
+export async function runAgentJsonWithRetry<T>(
+  opts: AgentRunOptions,
+  parse: (raw: string) => T,
+  runner: AgentRunner = runAgent,
+): Promise<T> {
+  const raw = await runner(opts)
+  try {
+    return parse(raw)
+  } catch {
+    const retried = await runner({ ...opts, prompt: `${opts.prompt}\n\n${INVALID_JSON_RETRY_NOTE}` })
+    try {
+      return parse(retried)
+    } catch (err) {
+      throw new AgentOutputError(err instanceof Error ? err.message : String(err), retried)
+    }
+  }
+}
+
+type DualOutcome =
+  | { ok: true; record: ReviewRecord; reportLines: string[] }
+  | { ok: false; failure: 'run' | 'output'; message: string; rawOutput?: string }
+
+export async function runDualFlow(opts: {
+  agentCommand: string
+  input: PrepInput
+  dir: string
+  timeoutMs: number
+  session: LiveSession
+  spinner: { update: (status: string) => void }
+}): Promise<DualOutcome> {
+  const { agentCommand, input, dir, timeoutMs, session, spinner } = opts
+  const inputBlock = `<input>\n${JSON.stringify({ ...agentVisibleInput(input), diff: input.diff }, null, 2)}\n</input>`
+  const closing = 'Output ONLY the JSON object now.'
+  const command = hardenedReviewCommand(agentCommand)
+  const env = agentEnv(agentCommand)
+
+  const lanes: { a: string | null; b: string | null } = { a: null, b: null }
+  const updateLanes = () =>
+    spinner.update(`${t('review.dualLaneA')} ${lanes.a ?? '…'} · ${t('review.dualLaneB')} ${lanes.b ?? '…'}`)
+  const laneRun = (lane: 'a' | 'b', prompt: string): Promise<SanitizedReview> => {
+    const forward = createPartialForwarder(session, lane)
+    return runAgentJsonWithRetry(
+      {
+        command,
+        env,
+        prompt,
+        cwd: input.repo_root,
+        timeoutMs,
+        onText: (text) => {
+          const partial = forward(text)
+          if (!partial) return
+          lanes[lane] = progressLabel(partial)
+          updateLanes()
+        },
+      },
+      (raw) => sanitizeReview(JSON.parse(extractReviewJson(raw))),
+    )
+  }
+
+  const [resA, resB] = await Promise.allSettled([
+    laneRun('a', [reviewInstructions(), inputBlock, closing].join('\n\n')),
+    laneRun('b', [prosecutorInstructions(languageRule()), inputBlock, closing].join('\n\n')),
+  ])
+
+  const settle = (
+    res: PromiseSettledResult<SanitizedReview>,
+  ): { review: SanitizedReview | null; error: string | null; raw: string | null } => {
+    if (res.status === 'fulfilled') return { review: res.value, error: null, raw: null }
+    const message = res.reason instanceof Error ? res.reason.message : String(res.reason)
+    return { review: null, error: message, raw: res.reason instanceof AgentOutputError ? res.reason.raw : null }
+  }
+  const a = settle(resA)
+  const b = settle(resB)
+
+  if (!a.review && !b.review) {
+    const raw = a.raw ?? b.raw
+    return {
+      ok: false,
+      failure: raw === null ? 'run' : 'output',
+      message: a.error ?? b.error ?? 'unknown',
+      ...(raw !== null ? { rawOutput: raw } : {}),
+    }
+  }
+
+  const buildRecord = (review: SanitizedReview): ReviewRecord => {
+    writeFileSync(join(dir, 'review.json'), JSON.stringify(review, null, 2))
+    return resolveRecord({ cwd: input.repo_root }).record
+  }
+
+  if (!a.review || !b.review) {
+    const survivor = (a.review ?? b.review) as SanitizedReview
+    const grounded = groundReview(survivor, input.diff)
+    const record = buildRecord(grounded.review)
+    return {
+      ok: true,
+      record,
+      reportLines: [
+        t('review.dualReviewerFailed', { message: (a.review ? b.error : a.error) ?? 'unknown' }),
+        ...groundingReportLines(grounded.report),
+      ],
+    }
+  }
+
+  const groundedA = groundReview(a.review, input.diff)
+  const groundedB = groundReview(b.review, input.diff)
+  const crossLane = dedupeExactCrossLane(groundedA.review, groundedB.review)
+  const aCount = crossLane.a.findings.length
+  const bCount = crossLane.b.findings.length
+  const total = aCount + bCount
+
+  let judgeOutput: JudgeOutput = { decisions: [] }
+  let judgeFailure: string | null = null
+  if (total > 0) {
+    session.setJudging(total)
+    spinner.update(t('review.dualJudging', { n: total }))
+    const judgeCommand = judgeCommandFor(agentCommand)
+    try {
+      let lastJudgeParse = 0
+      judgeOutput = await runAgentJsonWithRetry(
+        {
+          command: hardenedReviewCommand(judgeCommand),
+          env: agentEnv(judgeCommand),
+          prompt: [
+            judgeInstructions(languageRule()),
+            inputBlock,
+            judgeReviewBlocks(crossLane.a, crossLane.b),
+            closing,
+          ].join('\n\n'),
+          cwd: input.repo_root,
+          timeoutMs,
+          onText: (text) => {
+            const now = Date.now()
+            if (now - lastJudgeParse < PARTIAL_PARSE_INTERVAL_MS) return
+            lastJudgeParse = now
+            const partial = parsePartialJudge(text, aCount, bCount)
+            if (!partial) return
+            session.setJudge({ total, decisions: partial.decisions })
+            spinner.update(t('review.dualJudgeProgress', { done: partial.decisions.length, total }))
+          },
+        },
+        (raw) => sanitizeJudgeOutput(JSON.parse(extractReviewJson(raw)), aCount, bCount),
+      )
+      session.setJudge({ total, decisions: judgeOutput.decisions })
+    } catch (err) {
+      judgeFailure = err instanceof Error ? err.message : String(err)
+    }
+  }
+
+  const assembly = assembleDualReview(crossLane.a, crossLane.b, judgeOutput)
+  const dualStats = { ...assembly.stats, merged: assembly.stats.merged + crossLane.merged }
+  const final = groundReview(assembly.review, input.diff)
+  const resolved = buildRecord(final.review)
+  const record: ReviewRecord = { ...resolved, meta: { ...resolved.meta, dual: dualStats } }
+
+  const consensusCount = final.review.findings.filter((f) => f.consensus).length
+  const grounding: GroundingReport = {
+    dropped: [...groundedA.report.dropped, ...groundedB.report.dropped, ...final.report.dropped],
+    deanchored: [...groundedA.report.deanchored, ...groundedB.report.deanchored, ...final.report.deanchored],
+    merged: groundedA.report.merged + groundedB.report.merged + final.report.merged,
+    verdict_escalated: final.report.verdict_escalated,
+  }
+  return {
+    ok: true,
+    record,
+    reportLines: [
+      t('review.dualStats', {
+        merged: dualStats.merged,
+        rejected: dualStats.rejected,
+        added: dualStats.added_by_b,
+      }),
+      ...(consensusCount > 0 ? [t('review.dualConsensus', { n: consensusCount })] : []),
+      ...[
+        coverageGapLine(input, t('review.dualLaneA'), crossLane.a),
+        coverageGapLine(input, t('review.dualLaneB'), crossLane.b),
+      ].filter((line): line is string => line !== null),
+      ...(judgeFailure !== null ? [t('review.dualJudgeFailed', { message: judgeFailure })] : []),
+      ...groundingReportLines(grounding),
+    ],
   }
 }
 
@@ -237,6 +507,7 @@ export async function review(opts: {
   port?: number
   timeout?: number
   full?: boolean
+  dual?: boolean
   failOn?: ReviewGate
   open: boolean
   interactive?: boolean
@@ -274,16 +545,20 @@ export async function review(opts: {
   const input = prep({ branch, target: opts.target ?? config.target, cwd, quiet: true })
   const dir = ensureWorkDir(input.repo_root)
 
-  const incremental = opts.full ? null : buildIncrementalPrompt(input, input.repo_root)
+  // Dual reviews always start from scratch: the incremental prompt updates ONE
+  // previous review, which has no equivalent for two lanes plus a judge.
+  const dual = Boolean(opts.dual)
+  const incremental = opts.full || dual ? null : buildIncrementalPrompt(input, input.repo_root)
   const prompt =
     incremental?.prompt ??
-    `${reviewInstructions()}\n\n<input>\n${JSON.stringify(input, null, 2)}\n</input>\n\nOutput ONLY the JSON object now.`
+    `${reviewInstructions()}\n\n<input>\n${JSON.stringify({ ...agentVisibleInput(input), diff: input.diff }, null, 2)}\n</input>\n\nOutput ONLY the JSON object now.`
 
   const additions = input.files.reduce((n, f) => n + f.additions, 0)
   const deletions = input.files.reduce((n, f) => n + f.deletions, 0)
 
   const session = createSession()
   session.setAgent(agentCommand)
+  session.setMode(dual ? 'dual' : 'simple')
   session.setInput({
     branch: input.branch,
     target: input.target,
@@ -322,6 +597,9 @@ export async function review(opts: {
       value: `${t('review.modeIncremental')} ${dim(t('review.modeIncrementalHint', { sha: incremental.sinceSha.slice(0, 8) }))}`,
     })
   }
+  if (dual) {
+    headerRows.push({ label: t('field.mode'), value: t('review.modeDual') })
+  }
   if (input.custom_instructions) {
     headerRows.push({ label: t('field.prompt'), value: dim(t('review.customPrompt')) })
   }
@@ -334,50 +612,81 @@ export async function review(opts: {
 
   const shortCmd = agentCommand.length > 40 ? `${agentCommand.slice(0, 37)}…` : agentCommand
   const spinner = startSpinner(t('review.spinner', { cmd: shortCmd }))
-  const forwardPartial = createPartialForwarder(session)
 
-  let out: string
-  try {
-    out = await runAgent({
-      command: agentCommand,
-      prompt,
-      cwd: input.repo_root,
-      timeoutMs,
-      onText: (text) => {
-        const partial = forwardPartial(text)
-        if (!partial) return
-        const status = progressLabel(partial)
-        if (status) spinner.update(status)
-      },
-    })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    spinner.stop(`  ${paint('✘', RED)} ${t('review.runFailed')}`)
+  const failRun = async (kind: 'run' | 'output', message: string): Promise<void> => {
+    const heading = kind === 'run' ? t('review.runFailed') : t('review.unusableOutput')
+    spinner.stop(`  ${paint('✘', RED)} ${heading}`)
     session.setError(message)
-    if (isInteractive()) notifyDesktop('codesema', t('notify.failedRun'))
-    console.error(`codesema: ${t('review.runFailedDetail', { message })}`)
+    if (isInteractive()) notifyDesktop('codesema', t(kind === 'run' ? 'notify.failedRun' : 'notify.failedOutput'))
+    console.error(`codesema: ${kind === 'run' ? t('review.runFailedDetail', { message }) : message}`)
     console.log(`  ${t('review.stillUp', { url })}`)
     process.exitCode = 1
     if (opts.failOn) await stop()
-    return
   }
 
-  let record
-  try {
-    const json = extractReviewJson(out)
-    writeFileSync(join(dir, 'review.json'), json)
-    record = resolveRecord({ cwd: input.repo_root }).record
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    spinner.stop(`  ${paint('✘', RED)} ${t('review.unusableOutput')}`)
-    writeFileSync(join(dir, 'agent-output.txt'), out)
-    session.setError(message)
-    if (isInteractive()) notifyDesktop('codesema', t('notify.failedOutput'))
-    console.error(`codesema: ${message}`)
-    console.log(`  ${t('review.stillUp', { url })}`)
-    process.exitCode = 1
-    if (opts.failOn) await stop()
-    return
+  let record: ReviewRecord
+  let reportLines: string[]
+  if (dual) {
+    const outcome = await runDualFlow({ agentCommand, input, dir, timeoutMs, session, spinner })
+    if (!outcome.ok) {
+      if (outcome.rawOutput !== undefined) writeFileSync(join(dir, 'agent-output.txt'), outcome.rawOutput)
+      await failRun(outcome.failure, outcome.message)
+      return
+    }
+    record = outcome.record
+    reportLines = outcome.reportLines
+  } else {
+    const forwardPartial = createPartialForwarder(session)
+    let out: string
+    try {
+      out = await runAgentJsonWithRetry(
+        {
+          command: hardenedReviewCommand(agentCommand),
+          env: agentEnv(agentCommand),
+          prompt,
+          cwd: input.repo_root,
+          timeoutMs,
+          onText: (text) => {
+            const partial = forwardPartial(text)
+            if (!partial) return
+            const status = progressLabel(partial)
+            if (status) spinner.update(status)
+          },
+        },
+        (raw) => {
+          extractReviewJson(raw)
+          return raw
+        },
+      )
+    } catch (err) {
+      if (err instanceof AgentOutputError) {
+        writeFileSync(join(dir, 'agent-output.txt'), err.raw)
+        await failRun('output', err.message)
+      } else {
+        await failRun('run', err instanceof Error ? err.message : String(err))
+      }
+      return
+    }
+
+    try {
+      const json = extractReviewJson(out)
+      writeFileSync(join(dir, 'review.json'), json)
+      const resolved = resolveRecord({ cwd: input.repo_root }).record
+      const grounded = groundReview(resolved.review, resolved.diff)
+      record = { ...resolved, review: grounded.review }
+      writeFileSync(join(dir, 'review.json'), JSON.stringify(grounded.review, null, 2))
+      reportLines = groundingReportLines(grounded.report)
+      // Incremental reviews legitimately revisit only what changed: coverage
+      // against the full file list would cry wolf.
+      if (!incremental) {
+        const coverage = coverageGapLine(input, t('review.dualLaneA'), grounded.review)
+        if (coverage) reportLines.push(coverage)
+      }
+    } catch (err) {
+      writeFileSync(join(dir, 'agent-output.txt'), out)
+      await failRun('output', err instanceof Error ? err.message : String(err))
+      return
+    }
   }
 
   const savedPath = archiveRecord(record, input.repo_root)
@@ -387,13 +696,26 @@ export async function review(opts: {
   spinner.stop(`  ${paint('✔', GREEN)} ${t('review.ready')}`)
   console.log('')
   printReviewSummary(record)
+  if (reportLines.length > 0) {
+    console.log('')
+    reportLines.forEach((line) => console.log(`  ${dim(line)}`))
+  }
   console.log('')
   renderFieldRows([
     { label: t('field.web'), value: underline(paint(url, ACCENT)) },
     { label: t('field.archived'), value: dim(savedPath) },
   ]).forEach((line) => console.log(line))
   console.log('')
-  console.log(`  ${dim(t('review.syncHint'))}`)
+  const syncOutcome = await autoPushReview(record, input.repo_root)
+  const syncLine =
+    syncOutcome.status === 'pushed'
+      ? t(syncOutcome.deduplicated ? 'review.syncAlready' : 'review.syncPushed')
+      : syncOutcome.status === 'blocked_secrets'
+        ? t('review.syncBlockedSecrets', { n: syncOutcome.count })
+        : syncOutcome.status === 'failed'
+          ? t('review.syncFailed', { message: syncOutcome.message })
+          : null
+  console.log(`  ${dim(syncLine ?? t('review.syncHint'))}`)
   console.log(`  ${dim(t('review.ctrlc'))}`)
   printUpdateNotice(await latestVersion)
   if (isInteractive()) {

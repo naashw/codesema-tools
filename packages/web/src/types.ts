@@ -34,6 +34,12 @@ export type ReviewNarrative = {
   review_first: ReviewFirstItem[]
 }
 
+export type DualStats = {
+  merged: number
+  rejected: number
+  added_by_b: number
+}
+
 export type ReviewRecord = {
   version: 1
   meta: {
@@ -45,6 +51,8 @@ export type ReviewRecord = {
     head_sha?: string
     repo_root: string
     created_at: string
+    /** Present when the review was produced by a dual (two reviewers + judge) run. */
+    dual?: DualStats
   }
   commits: string[]
   diff: string
@@ -68,12 +76,31 @@ export type LiveInput = {
   incremental: boolean
 }
 
+export type LiveMode = 'simple' | 'dual'
+
 export type LiveStatus = {
-  phase: 'reviewing' | 'done' | 'error'
+  phase: 'reviewing' | 'judging' | 'done' | 'error'
   started_at: string
+  mode?: LiveMode
   agent?: string
   input?: LiveInput
   error?: string
+}
+
+// Mirrors packages/cli/src/dual.ts (JudgeDecision) and serve.ts (JudgeLive).
+
+export type JudgeDecision = {
+  id: string
+  action: 'keep' | 'reject'
+  duplicate_of?: string
+  reason?: string
+  severity?: 'critical' | 'major' | 'minor' | 'info'
+}
+
+/** Cumulative: each event carries every decision made so far. */
+export type JudgeLive = {
+  total: number
+  decisions: JudgeDecision[]
 }
 
 // Mirrors packages/cli/src/fix.ts (FixStatus) and the /api/fix endpoints.
