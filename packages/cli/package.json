@@ -4,6 +4,11 @@
   "description": "Local merge request review, step by step. Your AI agent reviews, codesema displays.",
   "license": "MIT",
   "author": "Hasan TASKIN",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/getCodesema/codesema-tools.git",
+    "directory": "packages/cli"
+  },
   "keywords": [
     "code-review",
     "merge-request",

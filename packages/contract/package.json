@@ -4,6 +4,11 @@
   "description": "Shared review contract (types + sanitizers) between the codesema CLI and codesema.com.",
   "license": "MIT",
   "author": "Hasan TASKIN",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/getCodesema/codesema-tools.git",
+    "directory": "packages/contract"
+  },
   "keywords": ["code-review", "codesema", "contract"],
   "type": "module",
   "main": "dist/index.mjs",
