@@ -232,6 +232,18 @@ describe('detectDiffSecrets', () => {
     const diff = diffFor('src/app.ts', ['a = "AKIAIOSFODNN7EXAMPLE"', 'b = "AKIAIOSFODNN7EXAMPLE"'])
     expect(detectDiffSecrets(diff)).toHaveLength(1)
   })
+
+  test('a GNU-style tab suffix on marker lines is stripped from the path', () => {
+    const diff = '--- a/.env\t2026-07-14 00:00:00\n+++ b/.env\t2026-07-14 00:00:00\n@@ -1 +1 @@\n-A=1\n+A=2\n'
+    expect(detectDiffSecrets(diff)).toContainEqual({ file: '.env', reason: 'filename', detail: '.env' })
+  })
+
+  test('a marker line stuffed with tabs and a stray carriage return parses in linear time', () => {
+    const hostile = `--- a/x\n+++ ${'\t'.repeat(60_000)}\r\n@@ -0,0 +1 @@\n+1\n`
+    const start = performance.now()
+    detectDiffSecrets(hostile)
+    expect(performance.now() - start).toBeLessThan(500)
+  })
 })
 
 const GROUND_DIFF = [

@@ -30,6 +30,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 - The review subprocess runs the known agent CLIs with tools switched off: `claude -p` gets `--tools "" --strict-mcp-config --setting-sources user` (no tools, no MCP servers, repo-level `.claude/` settings ignored) and `codex exec` gets `--sandbox read-only --ask-for-approval never` plus `AGENTS.md` loading disabled. Flags already present in the command win; the fix runner keeps its edit tools. Gemini has no CLI flag for this; its non-interactive mode already denies shell and write tools.
 - Known agent CLIs are spawned with a minimal environment (`PATH`, `HOME`, locale, proxy and the provider's own variables): other credentials and tokens in your environment no longer reach the review subprocess. Custom agent commands inherit the full environment as before.
+- Diff marker line parsing in `@codesema/contract` (`--- ` / `+++ ` paths) no longer uses a polynomially backtracking regex (CodeQL: polynomial ReDoS): a crafted diff line packed with tabs and a stray carriage return could stall `detectDiffSecrets` and `groundReview` for seconds. The tab suffix is now stripped with a linear `indexOf` scan.
 
 ## [0.7.0] - 2026-07-13
 

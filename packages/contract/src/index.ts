@@ -353,7 +353,9 @@ function gitHeaderNewPath(header: string): string {
 }
 
 function markerLinePath(line: string): string {
-  const raw = line.slice(4).replace(/\t.*$/, '').trim()
+  const rest = line.slice(4)
+  const tab = rest.indexOf('\t')
+  const raw = (tab === -1 ? rest : rest.slice(0, tab)).trim()
   if (raw === '/dev/null') return ''
   return raw.startsWith('a/') || raw.startsWith('b/') ? raw.slice(2) : raw
 }
