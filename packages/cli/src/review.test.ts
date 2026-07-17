@@ -77,6 +77,7 @@ describe('agentVisibleInput', () => {
       commits: ['feat: a'],
       files: [{ path: 'a.ts', additions: 1, deletions: 0 }],
       custom_instructions: null,
+      rules: ['[C1] no any'],
       impact_candidates: { note: 'best-effort', symbols: [], imported_by: { 'a.ts': ['b.ts'] } },
       diff: 'diff --git a/a.ts b/a.ts',
     }
@@ -86,6 +87,7 @@ describe('agentVisibleInput', () => {
       commits: ['feat: a'],
       files: [{ path: 'a.ts', additions: 1, deletions: 0 }],
       custom_instructions: null,
+      rules: ['[C1] no any'],
       impact_candidates: { note: 'best-effort', symbols: [], imported_by: { 'a.ts': ['b.ts'] } },
     })
   })
@@ -147,6 +149,8 @@ describe('reviewInstructions', () => {
     expect(p).toContain('settle EVERY file explicitly')
     expect(p).toContain('"status": "clean" | "findings"')
     expect(p).toContain('REFUTE every finding')
+    expect(p).toContain('HUNT them first')
+    expect(p).toContain('[Cn]')
   })
 })
 
@@ -247,6 +251,7 @@ describe('runDualFlow', () => {
       commits: ['feat: a'],
       files: [{ path: 'a.ts', additions: 1, deletions: 0 }],
       custom_instructions: null,
+      rules: null,
       impact_candidates: null,
       diff: 'diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-old\n+new\n',
     }

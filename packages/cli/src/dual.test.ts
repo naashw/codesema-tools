@@ -373,6 +373,8 @@ describe('prompt hardening', () => {
     expect(p).toContain('settle EVERY file explicitly')
     expect(p).toContain('"status": "clean" | "findings"')
     expect(p).toContain('REFUTE every finding')
+    expect(p).toContain('HUNT them first')
+    expect(p).toContain('[Cn]')
   })
 
   test('judge prompt requires citing the disproving diff lines and shares the severity scale', () => {
