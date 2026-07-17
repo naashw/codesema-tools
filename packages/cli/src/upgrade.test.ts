@@ -20,6 +20,18 @@ describe('detectPackageManager', () => {
     expect(detectPackageManager('/usr/local/lib/node_modules/codesema/dist/index.mjs')).toBe('npm')
     expect(detectPackageManager('/somewhere/else/index.mjs')).toBe('npm')
   })
+
+  test('matches whole path segments, not substrings', () => {
+    expect(detectPackageManager('/home/u/pnpm-tools/lib/node_modules/codesema/dist/index.mjs')).toBe('npm')
+    expect(detectPackageManager('/home/yarnell/lib/node_modules/codesema/dist/index.mjs')).toBe('npm')
+    expect(detectPackageManager('/home/u/.bunker/node_modules/codesema/dist/index.mjs')).toBe('npm')
+  })
+
+  test('detects from windows-style paths', () => {
+    expect(
+      detectPackageManager('C:\\Users\\u\\AppData\\Local\\pnpm\\global\\5\\node_modules\\codesema\\dist\\index.mjs'),
+    ).toBe('pnpm')
+  })
 })
 
 describe('upgradeCommand', () => {

@@ -9,9 +9,10 @@ export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun'
 
 /** Guesses the global package manager from where the CLI is installed. */
 export function detectPackageManager(installedPath: string): PackageManager {
-  if (installedPath.includes('.bun')) return 'bun'
-  if (installedPath.includes('pnpm')) return 'pnpm'
-  if (installedPath.includes('yarn')) return 'yarn'
+  const segments = installedPath.split(/[\\/]/)
+  if (segments.includes('.bun')) return 'bun'
+  if (segments.includes('pnpm')) return 'pnpm'
+  if (segments.includes('yarn')) return 'yarn'
   return 'npm'
 }
 
@@ -36,7 +37,9 @@ function runUpgrade(latest: string): void {
   console.log('')
   console.log(`  ${t('upgrade.running', { command })}`)
   console.log('')
-  const result = spawnSync(cmd, args, { stdio: 'inherit' })
+  // On Windows the package managers are .cmd shims, unreachable without a shell;
+  // args are shell-safe there because the version is validated by startUpdateCheck.
+  const result = spawnSync(cmd, args, { stdio: 'inherit', shell: process.platform === 'win32' })
   console.log('')
   if (result.status === 0) {
     console.log(`  ${paint('✔', GREEN)} ${t('upgrade.done', { latest })}`)
