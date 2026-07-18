@@ -25,14 +25,15 @@ const props = defineProps<{
   summary?: string | null
 }>()
 
+const RISK_DOT_DEFAULT = 'var(--codesema-risk-med)'
 const RISK_DOT: Record<string, string> = {
   high: 'var(--codesema-risk-high)',
-  medium: 'var(--codesema-risk-med)',
+  medium: RISK_DOT_DEFAULT,
   low: 'var(--codesema-risk-low)',
 }
 
 function riskDotColor(risk: string): string {
-  return RISK_DOT[risk] ?? RISK_DOT.medium!
+  return RISK_DOT[risk] ?? RISK_DOT_DEFAULT
 }
 
 const hasPrologue = computed(() =>
@@ -41,7 +42,7 @@ const hasPrologue = computed(() =>
 
 // Minimal markdown rendering (code spans, HTML-escaped) with no external dependency.
 function renderInline(text: string): string {
-  if (!text) return ''
+  if (!text) {return ''}
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

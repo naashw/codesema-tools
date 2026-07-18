@@ -40,12 +40,12 @@ export function formatFindingCounts(findings: Finding[]): string {
   const parts: string[] = []
   for (const severity of ['critical', 'major', 'minor', 'info'] as const) {
     const count = countOf(severity)
-    if (count === 0) continue
+    if (count === 0) {continue}
     const text = t(severityKeys[severity], { n: count })
     const color = SEVERITY_COLORS[severity]
     parts.push(color ? paint(text, color) : text)
   }
-  if (praise > 0) parts.push(paint(t('summary.praiseCount', { n: praise }), GREEN))
+  if (praise > 0) {parts.push(paint(t('summary.praiseCount', { n: praise }), GREEN))}
   return parts.length > 0 ? parts.join(' · ') : t('summary.none')
 }
 
@@ -57,7 +57,7 @@ export function printReviewSummary(record: ReviewRecord): void {
   ]).forEach((line) => console.log(line))
 
   const hotspots = review.narrative?.review_first ?? []
-  if (hotspots.length === 0) return
+  if (hotspots.length === 0) {return}
   console.log('')
   console.log(`  ${paint(t('summary.checkFirst'), ACCENT)}`)
 
@@ -67,6 +67,6 @@ export function printReviewSummary(record: ReviewRecord): void {
     const number = dim(`${index + 1}.`.padEnd(3))
     const risk = paint(t(`risk.${item.risk}`).padEnd(riskColumnWidth), RISK_COLORS[item.risk])
     console.log(`    ${number}${risk}${truncate(item.point, POINT_MAX)}`)
-    if (item.file) console.log(`    ${fileIndent}${dim(item.file)}`)
+    if (item.file) {console.log(`    ${fileIndent}${dim(item.file)}`)}
   })
 }

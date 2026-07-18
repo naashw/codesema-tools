@@ -23,7 +23,7 @@ function stepDelta(ch: StepView): { add: number; del: number } {
   let del = 0
   for (const chFile of ch.files) {
     const diffFile = props.parsedDiff.files.find((df) => sameFile(df.path, chFile))
-    if (!diffFile) continue
+    if (!diffFile) {continue}
     add += diffFile.addCount
     del += diffFile.delCount
   }
@@ -33,7 +33,7 @@ function stepDelta(ch: StepView): { add: number; del: number } {
 const firstUnreadIndex = computed(() => {
   const readSet = props.readSet ?? new Set<number>()
   for (let i = 0; i < props.steps.length; i++) {
-    if (!readSet.has(i)) return i
+    if (!readSet.has(i)) {return i}
   }
   return -1
 })

@@ -21,7 +21,7 @@ const isClient = typeof window !== 'undefined'
 const SPLIT_KEY = 'codesema-diff-mode'
 
 function loadMode(): 'split' | 'unified' {
-  if (!isClient) return 'unified'
+  if (!isClient) {return 'unified'}
   return (localStorage.getItem(SPLIT_KEY) as 'split' | 'unified') ?? 'unified'
 }
 
@@ -31,14 +31,14 @@ const diffMode = computed<'split' | 'unified'>(() => props.mode ?? internalMode.
 
 function setMode(m: 'split' | 'unified') {
   internalMode.value = m
-  if (isClient) localStorage.setItem(SPLIT_KEY, m)
+  if (isClient) {localStorage.setItem(SPLIT_KEY, m)}
 }
 
 // Large files (or files past the page's cumulative budget) start collapsed: their
 // DOM (v-if) is only created on expand, keeping the first render smooth on huge diffs.
 function initialCollapsedSet(): Set<string> {
   const collapsed = collapsedByBudget(props.files)
-  if (props.initialCollapsed) for (const f of props.files) collapsed.add(f.path)
+  if (props.initialCollapsed) {for (const f of props.files) {collapsed.add(f.path)}}
   return collapsed
 }
 
@@ -48,14 +48,14 @@ const collapsed = ref<Set<string>>(initialCollapsedSet())
 watch(
   () => props.collapseKey,
   (k) => {
-    if (k == null) return
+    if (k == null) {return}
     collapsed.value = k % 2 === 1 ? new Set(props.files.map((f) => f.path)) : new Set()
   },
 )
 
 function toggleFile(path: string) {
-  if (collapsed.value.has(path)) collapsed.value.delete(path)
-  else collapsed.value.add(path)
+  if (collapsed.value.has(path)) {collapsed.value.delete(path)}
+  else {collapsed.value.add(path)}
   // force reactivity
   collapsed.value = new Set(collapsed.value)
 }
@@ -91,7 +91,7 @@ const FALLBACK_KIND: KindMeta = { label: t('diffView.sevInfo'), color: 'var(--co
 function resolveKind(f: Finding): KindMeta {
   if (f.kind) {
     const k = NL_KIND[f.kind]
-    if (k) return k
+    if (k) {return k}
   }
   return SEV_KIND[f.severity] ?? FALLBACK_KIND
 }
@@ -111,10 +111,10 @@ function splitRows(rows: HunkLine[]): SplitRow[] {
   return toSplit(rows)
 }
 
-function cellClass(t: 'add' | 'del' | 'ctx' | 'nil'): string {
-  if (t === 'add') return 'srd-cell-add'
-  if (t === 'del') return 'srd-cell-del'
-  if (t === 'nil') return 'srd-cell-nil'
+function cellClass(kind: 'add' | 'del' | 'ctx' | 'nil'): string {
+  if (kind === 'add') {return 'srd-cell-add'}
+  if (kind === 'del') {return 'srd-cell-del'}
+  if (kind === 'nil') {return 'srd-cell-nil'}
   return 'srd-cell-ctx'
 }
 
@@ -135,7 +135,7 @@ function hunkRows(block: HunkBlock): HunkLine[] {
 }
 
 function extraNotes(byLine: Record<number, Finding[]>, lineNo: number | null): Finding[] {
-  if (lineNo == null) return []
+  if (lineNo == null) {return []}
   return (byLine[lineNo] ?? []).slice(1)
 }
 
@@ -157,7 +157,7 @@ async function revealFinding(id: number): Promise<void> {
   }
   await nextTick()
   const anchor = rootEl.value?.querySelector(`[data-finding-id="${id}"]`)
-  if (!(anchor instanceof HTMLElement)) return
+  if (!(anchor instanceof HTMLElement)) {return}
   anchor.scrollIntoView({ behavior: 'smooth', block: 'center' })
   const card = anchor.closest('.nlr-note') ?? anchor
   card.classList.add('nlr-note--flash')
@@ -167,7 +167,7 @@ async function revealFinding(id: number): Promise<void> {
 watch(
   () => props.reveal,
   (r) => {
-    if (r) void revealFinding(r.id)
+    if (r) {void revealFinding(r.id)}
   },
 )
 </script>

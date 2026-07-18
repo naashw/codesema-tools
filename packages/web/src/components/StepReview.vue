@@ -36,10 +36,10 @@ const canPrev = computed(() => props.selectedIndex > 0)
 const canNext = computed(() => props.selectedIndex < props.steps.length - 1)
 
 function goPrev() {
-  if (canPrev.value) emit('navigate', props.selectedIndex - 1)
+  if (canPrev.value) {emit('navigate', props.selectedIndex - 1)}
 }
 function goNext() {
-  if (canNext.value) emit('navigate', props.selectedIndex + 1)
+  if (canNext.value) {emit('navigate', props.selectedIndex + 1)}
 }
 
 const fileFilter = ref('')
@@ -49,9 +49,9 @@ watch(() => props.selectedIndex, () => {
 })
 
 const filteredFiles = computed(() => {
-  if (!step.value) return []
+  if (!step.value) {return []}
   const q = fileFilter.value.toLowerCase().trim()
-  if (!q) return step.value.files
+  if (!q) {return step.value.files}
   return step.value.files.filter((f) => f.toLowerCase().includes(q))
 })
 
@@ -61,7 +61,7 @@ function shortName(path: string): string {
 }
 
 const stepFindings = computed((): Finding[] => {
-  if (!step.value) return []
+  if (!step.value) {return []}
   return step.value.finding_refs
     .map((i) => props.findings[i])
     .filter((f): f is Finding => !!f)
@@ -70,7 +70,7 @@ const stepFindings = computed((): Finding[] => {
 const stepFindingCount = computed(() => stepFindings.value.length)
 
 const stepFiles = computed(() => {
-  if (!step.value || !props.diff) return []
+  if (!step.value || !props.diff) {return []}
   const parsed = parseDiff(props.diff, stepFindings.value)
   // Findings can reference a file the step forgot to list: include it so every
   // note of the step stays reachable (guided tour scrolls to note anchors).
@@ -89,7 +89,7 @@ const stepDelta = computed(() => {
 })
 
 function scrollToFile(filePath: string) {
-  if (typeof document === 'undefined') return
+  if (typeof document === 'undefined') {return}
   // DiffView renders file headers with a data-diff-file attribute derived from the path
   const allHeaders = document.querySelectorAll<HTMLElement>('[data-diff-file]')
   for (const el of allHeaders) {

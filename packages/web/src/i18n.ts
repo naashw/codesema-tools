@@ -269,7 +269,7 @@ const fr: Record<MessageKey, string> = {
 const catalogs: Record<string, Record<MessageKey, string>> = { en, fr }
 
 function detectLocale(): string {
-  if (typeof window === 'undefined') return 'en'
+  if (typeof window === 'undefined') {return 'en'}
   const injected = (window as { __CODESEMA_LOCALE__?: string }).__CODESEMA_LOCALE__
   return injected && catalogs[injected] ? injected : 'en'
 }
@@ -284,7 +284,7 @@ export function t(key: string, params?: Record<string, unknown>, count?: number)
     msg = (n === 1 ? parts[0] : parts[1] ?? parts[0]) ?? msg
   }
   if (params) {
-    for (const [k, v] of Object.entries(params)) msg = msg.replaceAll(`{${k}}`, String(v))
+    for (const [k, v] of Object.entries(params)) {msg = msg.replaceAll(`{${k}}`, String(v))}
   }
   return msg
 }

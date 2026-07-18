@@ -17,8 +17,8 @@ const emit = defineEmits<{
 type RailState = 'passed' | 'active' | 'pending'
 
 function stateOf(index: number): RailState {
-  if (props.readSet?.has(index)) return 'passed'
-  if (props.currentIndex === index) return 'active'
+  if (props.readSet?.has(index)) {return 'passed'}
+  if (props.currentIndex === index) {return 'active'}
   return 'pending'
 }
 
@@ -28,7 +28,7 @@ function toneOf(index: number): string {
 }
 
 function linkPassed(index: number): boolean {
-  if (index === 0) return stateOf(0) === 'passed'
+  if (index === 0) {return stateOf(0) === 'passed'}
   return stateOf(index - 1) === 'passed'
 }
 

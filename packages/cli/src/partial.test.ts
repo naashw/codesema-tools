@@ -75,7 +75,7 @@ describe('parsePartialReview', () => {
   test('progressive prefix: each slice parses or returns null, without throwing', () => {
     for (let cut = 1; cut <= FULL.length; cut++) {
       const partial = parsePartialReview(FULL.slice(0, cut))
-      if (cut === FULL.length) expect(partial?.findings).toHaveLength(2)
+      if (cut === FULL.length) {expect(partial?.findings).toHaveLength(2)}
     }
   })
 

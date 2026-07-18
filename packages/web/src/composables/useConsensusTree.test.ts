@@ -8,7 +8,7 @@ function row(over: Partial<ConsensusRow> & { path: string }): ConsensusRow {
 
 function dirNamed(nodes: ReturnType<typeof buildConsensusTree>, dir: string): ConsensusDirNode {
   const found = nodes.find((n) => n.kind === 'dir' && n.dir === dir)
-  if (!found || found.kind !== 'dir') throw new Error(`dir ${dir} not found`)
+  if (!found || found.kind !== 'dir') {throw new Error(`dir ${dir} not found`)}
   return found
 }
 

@@ -88,9 +88,9 @@ export type WizardResult = {
 
 export function composeCommand(def: AgentDef, model?: string, effort?: string): string {
   let command = def.base
-  if (model) command += ` ${def.modelFlag} ${model}`
-  if (effort && def.effortFlag) command += ` ${def.effortFlag(effort)}`
-  if (def.suffix) command += ` ${def.suffix}`
+  if (model) {command += ` ${def.modelFlag} ${model}`}
+  if (effort && def.effortFlag) {command += ` ${def.effortFlag(effort)}`}
+  if (def.suffix) {command += ` ${def.suffix}`}
   return command
 }
 
@@ -101,8 +101,8 @@ const CUSTOM = Symbol('custom')
 const LANGUAGE_TITLE = 'Language / Langue?'
 
 function defaultLanguageIndex(current?: SupportedLanguage): number {
-  if (current === 'en') return 0
-  if (current === 'fr') return 1
+  if (current === 'en') {return 0}
+  if (current === 'fr') {return 1}
   const env = process.env.LC_ALL || process.env.LC_MESSAGES || process.env.LANG || ''
   return env.toLowerCase().startsWith('fr') ? 1 : 0
 }
@@ -121,7 +121,7 @@ export async function pickLanguage(current?: SupportedLanguage): Promise<Support
  * choices for re-editing via `codesema config`. null if the user cancels.
  */
 export async function runAgentWizard(cwd: string, current: CodesemaConfig = {}): Promise<WizardResult | null> {
-  if (!isInteractive()) return null
+  if (!isInteractive()) {return null}
 
   const detected = detectAgents(cwd)
   const missing = AGENT_DEFS.filter((d) => !detected.includes(d))
@@ -147,7 +147,7 @@ export async function runAgentWizard(cwd: string, current: CodesemaConfig = {}):
     options: agentOptions,
     initialIndex: initialAgent >= 0 ? initialAgent : 0,
   })
-  if (picked === null) return null
+  if (picked === null) {return null}
 
   if (picked === CUSTOM) {
     const command = await textInput({
@@ -174,7 +174,7 @@ export async function runAgentWizard(cwd: string, current: CodesemaConfig = {}):
     options: modelOptions,
     initialIndex: initialModel >= 0 ? initialModel : 0,
   })
-  if (modelPick === null) return null
+  if (modelPick === null) {return null}
   let model: string | undefined
   if (modelPick === CUSTOM) {
     model = (await textInput({ title: t('wizard.modelName') })) ?? undefined
@@ -198,8 +198,8 @@ export async function runAgentWizard(cwd: string, current: CodesemaConfig = {}):
       options: effortOptions,
       initialIndex: initialEffort >= 0 ? initialEffort : effortOptions.length - 1,
     })
-    if (effortPick === null) return null
-    if (effortPick !== CLI_DEFAULT) effort = effortPick
+    if (effortPick === null) {return null}
+    if (effortPick !== CLI_DEFAULT) {effort = effortPick}
   }
 
   return { command: composeCommand(def, model, effort), agentId: def.id, model, effort }
@@ -209,8 +209,8 @@ function applyResult(config: CodesemaConfig, result: WizardResult): CodesemaConf
   const next: CodesemaConfig = { ...config, agent: result.command, agentId: result.agentId }
   delete next.model
   delete next.effort
-  if (result.model) next.model = result.model
-  if (result.effort) next.effort = result.effort
+  if (result.model) {next.model = result.model}
+  if (result.effort) {next.effort = result.effort}
   return next
 }
 
@@ -220,14 +220,14 @@ function applyResult(config: CodesemaConfig, result: WizardResult): CodesemaConf
  */
 export async function runOnboarding(cwd: string): Promise<string | null> {
   const language = (await pickLanguage()) ?? undefined
-  if (language) setLanguage(language)
+  if (language) {setLanguage(language)}
   console.log(`  ${bold(t('wizard.firstRun'))}`)
   console.log(`  ${dim(t('wizard.firstRunHint'))}`)
   console.log('')
   const result = await runAgentWizard(cwd)
-  if (!result) return null
+  if (!result) {return null}
   const config = applyResult(loadGlobalConfig(), result)
-  if (language) config.language = language
+  if (language) {config.language = language}
   const path = saveGlobalConfig(config)
   console.log(`  ${dim(t('wizard.saved', { path }))}`)
   return result.command
@@ -242,13 +242,13 @@ export type ConfigEntry = {
 }
 
 function languageLabel(language?: SupportedLanguage): string {
-  if (language === 'en') return 'English'
-  if (language === 'fr') return 'Français'
+  if (language === 'en') {return 'English'}
+  if (language === 'fr') {return 'Français'}
   return t('config.languageAuto')
 }
 
 function autoSyncLabel(syncAutoPush: boolean | undefined): string {
-  if (syncAutoPush === undefined) return t('config.autoSyncUnset')
+  if (syncAutoPush === undefined) {return t('config.autoSyncUnset')}
   return syncAutoPush ? t('config.autoSyncOn') : t('config.autoSyncOff')
 }
 
@@ -283,11 +283,11 @@ export async function configCommand(repoRoot: string | null): Promise<void> {
       })),
       summary: false,
     })
-    if (picked === null || picked === 'back') return
+    if (picked === null || picked === 'back') {return}
 
     if (picked === 'language') {
       const language = await pickLanguage(current.language)
-      if (!language) continue
+      if (!language) {continue}
       setLanguage(language)
       // The UI language is global by nature; a per-repo override remains possible
       // by hand in .codesema/config.json but is not offered here.
@@ -308,7 +308,7 @@ export async function configCommand(repoRoot: string | null): Promise<void> {
         initialIndex: current.syncAutoPush === true ? 1 : 0,
         summary: false,
       })
-      if (choice === null) continue
+      if (choice === null) {continue}
       // Auto-sync is global-only, like the sync credentials it depends on: a
       // repo config must never be able to turn on pushing diffs off the machine.
       const path = saveGlobalConfig({ ...loadGlobalConfig(), syncAutoPush: choice === 'on' })
@@ -332,7 +332,7 @@ async function configureAgent(repoRoot: string | null, current: CodesemaConfig):
   }
 
   const result = await runAgentWizard(repoRoot ?? process.cwd(), current)
-  if (!result) return
+  if (!result) {return}
 
   let scope: 'global' | 'repo' = 'global'
   if (repoRoot) {
@@ -343,7 +343,7 @@ async function configureAgent(repoRoot: string | null, current: CodesemaConfig):
         { label: t('config.thisRepo'), hint: t('config.thisRepoHint'), value: 'repo' },
       ],
     })
-    if (pickedScope === null) return
+    if (pickedScope === null) {return}
     scope = pickedScope
   }
 

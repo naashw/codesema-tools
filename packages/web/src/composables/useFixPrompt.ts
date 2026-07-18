@@ -5,7 +5,7 @@ const INSTRUCTION =
   'Fix the following code review findings. Change only what each finding requires.'
 
 export function isActionable(f: Finding): boolean {
-  if (f.kind === 'praise' || f.kind === 'why') return false
+  if (f.kind === 'praise' || f.kind === 'why') {return false}
   return f.severity !== 'info'
 }
 

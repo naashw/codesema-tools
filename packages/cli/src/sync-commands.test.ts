@@ -255,10 +255,10 @@ describe('sync and link commands', () => {
 
   afterEach(async () => {
     await stub.close()
-    if (previousConfigDir === undefined) delete process.env.CODESEMA_CONFIG_DIR
-    else process.env.CODESEMA_CONFIG_DIR = previousConfigDir
-    if (previousSyncUrl === undefined) delete process.env.CODESEMA_SYNC_URL
-    else process.env.CODESEMA_SYNC_URL = previousSyncUrl
+    if (previousConfigDir === undefined) {delete process.env.CODESEMA_CONFIG_DIR}
+    else {process.env.CODESEMA_CONFIG_DIR = previousConfigDir}
+    if (previousSyncUrl === undefined) {delete process.env.CODESEMA_SYNC_URL}
+    else {process.env.CODESEMA_SYNC_URL = previousSyncUrl}
     rmSync(configDir, { recursive: true, force: true })
     rmSync(repoDir, { recursive: true, force: true })
   })

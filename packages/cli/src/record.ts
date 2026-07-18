@@ -23,7 +23,7 @@ function archiveNames(reviewsDir: string, slugged: string): string[] {
   const stampTail = /^\d{8}-\d{6}\.json$/
   return readdirSync(reviewsDir)
     .filter((n) => n.startsWith(`${slugged}-`) && stampTail.test(n.slice(slugged.length + 1)))
-    .sort()
+    .toSorted()
 }
 
 export function archiveRecord(record: ReviewRecord, cwd: string): string {
@@ -55,7 +55,7 @@ function buildRecord(agentOutputPath: string, dir: string): ReviewRecord {
   }
   const raw = readJson(inputPath)
   const input = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
-  return sanitizeRecord({
+  const record = sanitizeRecord({
     meta: {
       title: input.title,
       branch: input.branch,
@@ -67,17 +67,23 @@ function buildRecord(agentOutputPath: string, dir: string): ReviewRecord {
     commits: input.commits,
     diff: input.diff,
     review: readJson(agentOutputPath),
-  })!
+  })
+  if (!record) {
+    throw new Error(t('record.invalidJson', { path: agentOutputPath }))
+  }
+  return record
 }
 
 function latestSavedRecord(reviewsDir: string): { record: ReviewRecord; path: string } | null {
-  if (!existsSync(reviewsDir)) return null
-  const names = readdirSync(reviewsDir).filter((n) => n.endsWith('.json')).sort()
+  if (!existsSync(reviewsDir)) {return null}
+  const names = readdirSync(reviewsDir).filter((n) => n.endsWith('.json')).toSorted()
   for (let i = names.length - 1; i >= 0; i--) {
-    const path = join(reviewsDir, names[i]!)
+    const name = names[i]
+    if (!name) {continue}
+    const path = join(reviewsDir, name)
     try {
       const record = sanitizeRecord(readJson(path))
-      if (record) return { record, path }
+      if (record) {return { record, path }}
     } catch {
       // unreadable archive: fall back to the previous one
     }
@@ -88,8 +94,8 @@ function latestSavedRecord(reviewsDir: string): { record: ReviewRecord; path: st
 /** Last archived review of this branch to this target, with a known head_sha. */
 export function findPreviousReview(cwd: string, branch: string, target: string): ReviewRecord | null {
   const reviewsDir = join(cwd, '.codesema', 'reviews')
-  if (!existsSync(reviewsDir)) return null
-  const names = archiveNames(reviewsDir, slug(branch)).reverse()
+  if (!existsSync(reviewsDir)) {return null}
+  const names = archiveNames(reviewsDir, slug(branch)).toReversed()
   for (const name of names) {
     try {
       const record = sanitizeRecord(readJson(join(reviewsDir, name)))

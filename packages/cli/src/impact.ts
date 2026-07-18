@@ -41,10 +41,10 @@ const PYTHON_DECLARATIONS = [/^(?:async\s+)?def\s+([A-Za-z_]\w*)/, /^class\s+([A
 
 function declarationPatterns(file: string): RegExp[] {
   const dot = file.lastIndexOf('.')
-  if (dot < 0) return []
+  if (dot < 0) {return []}
   const ext = file.slice(dot + 1).toLowerCase()
-  if (TS_JS_EXTENSIONS.has(ext)) return TS_JS_DECLARATIONS
-  if (ext === 'py') return PYTHON_DECLARATIONS
+  if (TS_JS_EXTENSIONS.has(ext)) {return TS_JS_DECLARATIONS}
+  if (ext === 'py') {return PYTHON_DECLARATIONS}
   return []
 }
 
@@ -54,8 +54,8 @@ function isUsableName(name: string): boolean {
 
 function parseDiffPath(raw: string): string | null {
   const path = raw.trim()
-  if (path === '/dev/null') return null
-  if (path.startsWith('a/') || path.startsWith('b/')) return path.slice(2)
+  if (path === '/dev/null') {return null}
+  if (path.startsWith('a/') || path.startsWith('b/')) {return path.slice(2)}
   return path
 }
 
@@ -67,7 +67,7 @@ export function diffFilePaths(diff: string): string[] {
       minusPath = parseDiffPath(line.slice(4))
     } else if (line.startsWith('+++ ')) {
       const file = parseDiffPath(line.slice(4)) ?? minusPath
-      if (file && !files.includes(file)) files.push(file)
+      if (file && !files.includes(file)) {files.push(file)}
     }
   }
   return files
@@ -93,7 +93,7 @@ export function changedSymbolsFromDiff(diff: string): ChangedSymbol[] {
   const record = (content: string, side: 'minus' | 'plus') => {
     for (const pattern of patterns) {
       const name = pattern.exec(content)?.[1]
-      if (!name || !isUsableName(name)) continue
+      if (!name || !isUsableName(name)) {continue}
       const entry = sides.get(name) ?? { minus: false, plus: false }
       entry[side] = true
       sides.set(name, entry)
@@ -112,8 +112,8 @@ export function changedSymbolsFromDiff(diff: string): ChangedSymbol[] {
       file = parseDiffPath(line.slice(4)) ?? minusPath
       patterns = file ? declarationPatterns(file) : []
     } else if (file && patterns.length > 0) {
-      if (line.startsWith('+')) record(line.slice(1), 'plus')
-      else if (line.startsWith('-')) record(line.slice(1), 'minus')
+      if (line.startsWith('+')) {record(line.slice(1), 'plus')}
+      else if (line.startsWith('-')) {record(line.slice(1), 'minus')}
     }
   }
   flush()
@@ -122,13 +122,13 @@ export function changedSymbolsFromDiff(diff: string): ChangedSymbol[] {
 
 function grepUsages(name: string, excludes: string[], cwd: string): string[] {
   const out = tryGit(['grep', '-n', '--word-regexp', '--fixed-strings', '-e', name, '--', '.', ...excludes], cwd)
-  if (!out) return []
+  if (!out) {return []}
   const usages: string[] = []
   for (const line of out.split('\n')) {
     const match = /^(.+?):(\d+):/.exec(line)
-    if (!match) continue
+    if (!match) {continue}
     usages.push(`${match[1]}:${match[2]}`)
-    if (usages.length >= MAX_USED_AT_PER_SYMBOL) break
+    if (usages.length >= MAX_USED_AT_PER_SYMBOL) {break}
   }
   return usages
 }
@@ -136,16 +136,16 @@ function grepUsages(name: string, excludes: string[], cwd: string): string[] {
 function grepImporters(file: string, excludes: string[], cwd: string): string[] {
   const basename = file.split('/').pop() ?? file
   const stem = basename.replace(/\.[^.]+$/, '')
-  if (stem.length < MIN_NAME_LENGTH || GENERIC_BASENAMES.has(stem.toLowerCase())) return []
+  if (stem.length < MIN_NAME_LENGTH || GENERIC_BASENAMES.has(stem.toLowerCase())) {return []}
   const out = tryGit(['grep', '-n', '--word-regexp', '--fixed-strings', '-e', stem, '--', '.', ...excludes], cwd)
-  if (!out) return []
+  if (!out) {return []}
   const importers: string[] = []
   for (const line of out.split('\n')) {
     const match = /^(.+?):\d+:(.*)$/.exec(line)
-    if (!match || match[1] === undefined || match[2] === undefined) continue
-    if (!/\b(import|require|from|include|use)\b/.test(match[2])) continue
-    if (!importers.includes(match[1])) importers.push(match[1])
-    if (importers.length >= MAX_IMPORTERS_PER_FILE) break
+    if (!match || match[1] === undefined || match[2] === undefined) {continue}
+    if (!/\b(import|require|from|include|use)\b/.test(match[2])) {continue}
+    if (!importers.includes(match[1])) {importers.push(match[1])}
+    if (importers.length >= MAX_IMPORTERS_PER_FILE) {break}
   }
   return importers
 }
@@ -167,11 +167,11 @@ export function buildImpactCandidates(diff: string, cwd: string): ImpactCandidat
 
   const importedBy: Record<string, string[]> = {}
   for (const file of diffFiles) {
-    if (declarationPatterns(file).length === 0) continue
+    if (declarationPatterns(file).length === 0) {continue}
     const importers = grepImporters(file, excludes, cwd)
-    if (importers.length > 0) importedBy[file] = importers
+    if (importers.length > 0) {importedBy[file] = importers}
   }
 
-  if (symbols.length === 0 && Object.keys(importedBy).length === 0) return null
+  if (symbols.length === 0 && Object.keys(importedBy).length === 0) {return null}
   return { note: IMPACT_NOTE, symbols, imported_by: importedBy }
 }

@@ -59,7 +59,7 @@ const lanes: Lane[] = values.lane === 'both' ? ['a', 'b'] : [values.lane]
 const fixturesDir = join(import.meta.dir, 'fixtures')
 const fixtures = readdirSync(fixturesDir)
   .filter((name) => name.endsWith('.json'))
-  .sort()
+  .toSorted()
   .map((name) => JSON.parse(readFileSync(join(fixturesDir, name), 'utf8')) as Fixture)
 
 let totalExpected = 0

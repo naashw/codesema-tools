@@ -20,18 +20,18 @@ const CLOSED_STRING_TAIL = /^"(?:[^"\\]|\\.)*"$/
 
 function lastNonWhitespace(s: string, before: number): string {
   for (let i = before - 1; i >= 0; i--) {
-    const ch = s[i]!
-    if (ch !== ' ' && ch !== '\n' && ch !== '\r' && ch !== '\t') return ch
+    const ch = s.charAt(i)
+    if (ch !== ' ' && ch !== '\n' && ch !== '\r' && ch !== '\t') {return ch}
   }
   return ''
 }
 
 function stringStartBackwards(s: string): number {
   for (let i = s.length - 2; i >= 0; i--) {
-    if (s[i] !== '"') continue
+    if (s[i] !== '"') {continue}
     let backslashes = 0
-    for (let j = i - 1; j >= 0 && s[j] === '\\'; j--) backslashes++
-    if (backslashes % 2 === 0) return i
+    for (let j = i - 1; j >= 0 && s[j] === '\\'; j--) {backslashes++}
+    if (backslashes % 2 === 0) {return i}
   }
   return -1
 }
@@ -43,7 +43,7 @@ function stringStartBackwards(s: string): number {
  */
 export function repairTruncatedJson(raw: string): string | null {
   const start = raw.indexOf('{')
-  if (start < 0) return null
+  if (start < 0) {return null}
   let s = raw.slice(start)
 
   const stack: string[] = []
@@ -53,11 +53,11 @@ export function repairTruncatedJson(raw: string): string | null {
   let lastStructural = -1
 
   for (let i = 0; i < s.length; i++) {
-    const ch = s[i]!
+    const ch = s.charAt(i)
     if (inString) {
-      if (escaped) escaped = false
-      else if (ch === '\\') escaped = true
-      else if (ch === '"') inString = false
+      if (escaped) {escaped = false}
+      else if (ch === '\\') {escaped = true}
+      else if (ch === '"') {inString = false}
       continue
     }
     if (ch === '"') {
@@ -76,24 +76,24 @@ export function repairTruncatedJson(raw: string): string | null {
     }
     if (ch === '}' || ch === ']') {
       stack.pop()
-      if (stack.length === 0) return s.slice(0, i + 1)
+      if (stack.length === 0) {return s.slice(0, i + 1)}
     }
   }
 
   if (inString) {
-    if (escaped) s = s.slice(0, -1)
+    if (escaped) {s = s.slice(0, -1)}
     s = s.replace(/\\u[0-9a-fA-F]{0,3}$/, '')
     s += '"'
     const prev = lastNonWhitespace(s, stringStart)
     const isKey = stack[stack.length - 1] === '{' && (prev === '{' || prev === ',')
-    if (isKey) s = s.slice(0, stringStart)
+    if (isKey) {s = s.slice(0, stringStart)}
   } else {
     const tail = s.slice(lastStructural + 1).trim()
     if (tail && !LITERAL_TAIL.test(tail)) {
       if (CLOSED_STRING_TAIL.test(tail)) {
         const before = s[lastStructural] ?? ''
         const isKey = stack[stack.length - 1] === '{' && (before === '{' || before === ',')
-        if (isKey) s = s.slice(0, lastStructural + 1)
+        if (isKey) {s = s.slice(0, lastStructural + 1)}
       } else {
         s = s.slice(0, lastStructural + 1)
       }
@@ -117,14 +117,14 @@ export function repairTruncatedJson(raw: string): string | null {
     break
   }
 
-  for (let i = stack.length - 1; i >= 0; i--) s += stack[i] === '{' ? '}' : ']'
+  for (let i = stack.length - 1; i >= 0; i--) {s += stack[i] === '{' ? '}' : ']'}
   return s
 }
 
 /** Tolerant extraction of the fields already readable from the review in progress. */
 export function parsePartialReview(raw: string): PartialReview | null {
   const repaired = repairTruncatedJson(raw)
-  if (!repaired) return null
+  if (!repaired) {return null}
 
   let parsed: unknown
   try {
@@ -132,7 +132,7 @@ export function parsePartialReview(raw: string): PartialReview | null {
   } catch {
     return null
   }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {return null}
   const r = parsed as Record<string, unknown>
 
   const verdict =
@@ -142,9 +142,9 @@ export function parsePartialReview(raw: string): PartialReview | null {
   const findings: PartialFinding[] = []
   if (Array.isArray(r.findings)) {
     for (const item of r.findings.slice(0, 200)) {
-      if (!item || typeof item !== 'object') continue
+      if (!item || typeof item !== 'object') {continue}
       const f = item as Record<string, unknown>
-      if (typeof f.file !== 'string' || !f.file || typeof f.message !== 'string' || !f.message) continue
+      if (typeof f.file !== 'string' || !f.file || typeof f.message !== 'string' || !f.message) {continue}
       findings.push({
         file: f.file,
         message: f.message,
@@ -166,6 +166,6 @@ export function parsePartialReview(raw: string): PartialReview | null {
     : []
   const intent = typeof narrative?.intent === 'string' && narrative.intent.trim() ? narrative.intent.trim() : undefined
 
-  if (!verdict && !summary && !intent && findings.length === 0 && stepTitles.length === 0) return null
+  if (!verdict && !summary && !intent && findings.length === 0 && stepTitles.length === 0) {return null}
   return { verdict, summary, intent, findings, stepTitles }
 }

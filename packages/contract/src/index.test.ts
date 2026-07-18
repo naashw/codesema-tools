@@ -435,20 +435,20 @@ describe('reviewRecordSchema', () => {
   test('every $ref resolves to a defined $def', () => {
     const refs: string[] = []
     const walk = (node: unknown): void => {
-      if (!node || typeof node !== 'object') return
+      if (!node || typeof node !== 'object') {return}
       for (const [key, value] of Object.entries(node)) {
-        if (key === '$ref' && typeof value === 'string') refs.push(value)
-        else walk(value)
+        if (key === '$ref' && typeof value === 'string') {refs.push(value)}
+        else {walk(value)}
       }
     }
     walk(reviewRecordSchema)
     const defs = new Set(Object.keys(reviewRecordSchema.$defs))
     expect(refs.length).toBeGreaterThan(0)
-    for (const ref of refs) expect(defs.has(ref.replace('#/$defs/', ''))).toBe(true)
+    for (const ref of refs) {expect(defs.has(ref.replace('#/$defs/', ''))).toBe(true)}
   })
 
   test('top-level required keys all exist in properties', () => {
     const props = new Set(Object.keys(reviewRecordSchema.properties))
-    for (const key of reviewRecordSchema.required) expect(props.has(key)).toBe(true)
+    for (const key of reviewRecordSchema.required) {expect(props.has(key)).toBe(true)}
   })
 })

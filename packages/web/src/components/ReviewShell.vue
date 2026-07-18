@@ -46,13 +46,14 @@ const globalDelta = computed(() => {
   return { add, del }
 })
 
+const VERDICT_META_COMMENT = { labelKey: 'verdict.comment', cls: 'sr-verdict--comment' }
 const VERDICT_META: Record<string, { labelKey: string; cls: string }> = {
   approve: { labelKey: 'verdict.approve', cls: 'sr-verdict--approve' },
   request_changes: { labelKey: 'verdict.request_changes', cls: 'sr-verdict--changes' },
-  comment: { labelKey: 'verdict.comment', cls: 'sr-verdict--comment' },
+  comment: VERDICT_META_COMMENT,
 }
 
-const verdictMeta = computed(() => VERDICT_META[props.record.review.verdict] ?? VERDICT_META.comment!)
+const verdictMeta = computed(() => VERDICT_META[props.record.review.verdict] ?? VERDICT_META_COMMENT)
 
 const actionableCount = computed(() => findings.value.filter(isActionable).length)
 const focusList = computed(() => actionableFindings(findings.value))
@@ -71,7 +72,7 @@ async function copyFixPrompt() {
   try {
     await navigator.clipboard.writeText(buildFixPrompt(props.record))
     copied.value = true
-    if (copiedTimer) clearTimeout(copiedTimer)
+    if (copiedTimer) {clearTimeout(copiedTimer)}
     copiedTimer = setTimeout(() => {
       copied.value = false
     }, 2000)
@@ -118,9 +119,9 @@ const tourHasNext = computed(() => tourIndex.value !== null && tourIndex.value <
 
 async function applyTourStop(index: number) {
   const stop = tour.value[index]
-  if (!stop) return
+  if (!stop) {return}
   const previous = tourStop.value
-  if (previous && stop.stepIndex > previous.stepIndex) markRead(previous.stepIndex)
+  if (previous && stop.stepIndex > previous.stepIndex) {markRead(previous.stepIndex)}
   tourIndex.value = index
   if (guidedIndex.value !== stop.stepIndex) {
     guidedIndex.value = stop.stepIndex
@@ -128,7 +129,7 @@ async function applyTourStop(index: number) {
   }
   await nextTick()
   if (stop.findingId === null) {
-    if (isClient) window.scrollTo({ top: 0, behavior: 'smooth' })
+    if (isClient) {window.scrollTo({ top: 0, behavior: 'smooth' })}
     return
   }
   reveal.value = { id: stop.findingId, nonce: ++revealNonce }
@@ -139,7 +140,7 @@ function startTour() {
 }
 
 function tourNext() {
-  if (tourIndex.value === null) return
+  if (tourIndex.value === null) {return}
   if (tourHasNext.value) {
     void applyTourStop(tourIndex.value + 1)
     return
@@ -148,12 +149,12 @@ function tourNext() {
 }
 
 function tourPrev() {
-  if (tourIndex.value !== null && tourHasPrev.value) void applyTourStop(tourIndex.value - 1)
+  if (tourIndex.value !== null && tourHasPrev.value) {void applyTourStop(tourIndex.value - 1)}
 }
 
 function finishTour() {
   const stop = tourStop.value
-  if (stop) markRead(stop.stepIndex)
+  if (stop) {markRead(stop.stepIndex)}
   tourIndex.value = null
   guidedIndex.value = null
   syncHash()
@@ -161,13 +162,13 @@ function finishTour() {
 
 /** Manual step navigation during a tour: snap the tour onto the chosen step. */
 function realignTour(stepIndex: number) {
-  if (tourIndex.value === null) return
+  if (tourIndex.value === null) {return}
   const at = tour.value.findIndex((s) => s.stepIndex === stepIndex && s.findingId === null)
   tourIndex.value = at >= 0 ? at : null
 }
 
 function syncHash() {
-  if (!isClient) return
+  if (!isClient) {return}
   const hash =
     viewMode.value === 'focus'
       ? '#focus'
@@ -181,13 +182,13 @@ function syncHash() {
 
 if (isClient) {
   const m = /^#step-(\d+)$/.exec(location.hash)
-  if (location.hash === '#focus') viewMode.value = 'focus'
-  else if (location.hash === '#files') activeTab.value = 'files'
-  else if (m && Number(m[1]) < steps.value.length) guidedIndex.value = Number(m[1])
+  if (location.hash === '#focus') {viewMode.value = 'focus'}
+  else if (location.hash === '#files') {activeTab.value = 'files'}
+  else if (m && Number(m[1]) < steps.value.length) {guidedIndex.value = Number(m[1])}
 }
 
 const otherFiles = computed(() => {
-  if (!hasSteps.value) return []
+  if (!hasSteps.value) {return []}
   const covered = steps.value.flatMap((ch) => ch.files)
   return parsedDiff.value.files.filter((f) => !covered.some((c) => sameFile(c, f.path)))
 })
@@ -200,7 +201,7 @@ const filesDiffMode = ref<'split' | 'unified'>(
 
 function setFilesDiffMode(m: 'split' | 'unified') {
   filesDiffMode.value = m
-  if (isClient) localStorage.setItem(FILES_SPLIT_KEY, m)
+  if (isClient) {localStorage.setItem(FILES_SPLIT_KEY, m)}
 }
 
 // Each per-file DiffView sees a single file, so it can't judge the page-wide total.
@@ -215,8 +216,8 @@ function toggleFilesCollapse() {
 
 const fileScrollRefs = new Map<string, HTMLElement>()
 function setFileScrollRef(path: string, el: unknown) {
-  if (el instanceof HTMLElement) fileScrollRefs.set(path, el)
-  else fileScrollRefs.delete(path)
+  if (el instanceof HTMLElement) {fileScrollRefs.set(path, el)}
+  else {fileScrollRefs.delete(path)}
 }
 function onFilePick(path: string) {
   fileScrollRefs.get(path)?.scrollIntoView({ behavior: 'smooth', block: 'start' })

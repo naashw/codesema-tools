@@ -4,7 +4,7 @@ import type { PartialReview } from '../types'
 
 type Severity = 'critical' | 'major' | 'minor' | 'info'
 
-const SEVERITIES: Severity[] = ['critical', 'major', 'minor', 'info']
+const SEVERITIES: ReadonlySet<Severity> = new Set(['critical', 'major', 'minor', 'info'])
 
 // Same mapping as ReviewLive's single-lane findings feed: kept in sync there.
 const SEVERITY_COLOR: Record<Severity, string> = {
@@ -35,7 +35,7 @@ const currentStep = computed(() => props.partial?.stepTitles.at(-1))
 const severityCounts = computed(() => {
   const counts: Record<Severity, number> = { critical: 0, major: 0, minor: 0, info: 0 }
   for (const f of findings.value) {
-    if (f.severity && SEVERITIES.includes(f.severity as Severity)) counts[f.severity as Severity]++
+    if (f.severity && SEVERITIES.has(f.severity as Severity)) {counts[f.severity as Severity]++}
   }
   return counts
 })

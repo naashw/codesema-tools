@@ -44,6 +44,6 @@ export async function show(opts: { review?: string; port?: number; open: boolean
   console.log(`codesema — ${record.meta.branch} → ${record.meta.target}`)
   console.log(`  ${url}`)
   console.log(`  ${t('review.ctrlc')}`)
-  if (opts.open) openBrowser(url)
+  if (opts.open) {openBrowser(url)}
   printUpdateNotice(await latestVersion)
 }

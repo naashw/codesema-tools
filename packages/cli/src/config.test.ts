@@ -25,8 +25,8 @@ describe('repo agent trust store', () => {
   })
 
   afterEach(() => {
-    if (previousConfigDir === undefined) delete process.env.CODESEMA_CONFIG_DIR
-    else process.env.CODESEMA_CONFIG_DIR = previousConfigDir
+    if (previousConfigDir === undefined) {delete process.env.CODESEMA_CONFIG_DIR}
+    else {process.env.CODESEMA_CONFIG_DIR = previousConfigDir}
     rmSync(configDir, { recursive: true, force: true })
   })
 
@@ -64,8 +64,8 @@ describe('sync credentials round-trip', () => {
   })
 
   afterEach(() => {
-    if (previousConfigDir === undefined) delete process.env.CODESEMA_CONFIG_DIR
-    else process.env.CODESEMA_CONFIG_DIR = previousConfigDir
+    if (previousConfigDir === undefined) {delete process.env.CODESEMA_CONFIG_DIR}
+    else {process.env.CODESEMA_CONFIG_DIR = previousConfigDir}
     rmSync(configDir, { recursive: true, force: true })
   })
 
@@ -109,8 +109,8 @@ describe('sync fields are global-only', () => {
   })
 
   afterEach(() => {
-    if (previousConfigDir === undefined) delete process.env.CODESEMA_CONFIG_DIR
-    else process.env.CODESEMA_CONFIG_DIR = previousConfigDir
+    if (previousConfigDir === undefined) {delete process.env.CODESEMA_CONFIG_DIR}
+    else {process.env.CODESEMA_CONFIG_DIR = previousConfigDir}
     rmSync(configDir, { recursive: true, force: true })
     rmSync(repoDir, { recursive: true, force: true })
   })

@@ -16,7 +16,7 @@ import { ACCENT, GREEN, bold, dim, paint, renderFieldRows, startSpinner, underli
 function printOperationResult(statusMessage: string, rows: FieldRow[]): void {
   console.log('')
   console.log(`  ${paint('✔', GREEN)} ${statusMessage}`)
-  for (const line of renderFieldRows(rows)) console.log(`  ${line}`)
+  for (const line of renderFieldRows(rows)) {console.log(`  ${line}`)}
 }
 
 // The diff carried by a review record is uploaded verbatim on sync. A committed
@@ -39,7 +39,7 @@ export function syncBaseUrl(): string {
 
 export function loadSyncCredentials(): SyncCredentials | null {
   const config = loadGlobalConfig()
-  if (!config.syncWorkspaceId || !config.syncSecret) return null
+  if (!config.syncWorkspaceId || !config.syncSecret) {return null}
   // The secret is a bearer token: it is only ever sent to the host it was
   // created against (stored syncUrl), so a later CODESEMA_SYNC_URL change
   // cannot redirect it to another server. Credentials saved before the URL
@@ -61,7 +61,7 @@ async function api<T>(
   try {
     res = await fetchImpl(url, {
       ...init,
-      headers: { 'content-type': 'application/json', ...(init.headers ?? {}) },
+      headers: { 'content-type': 'application/json', ...init.headers },
       signal: AbortSignal.timeout(30_000),
     })
   } catch {
@@ -73,7 +73,7 @@ async function api<T>(
     throw new Error(message)
   }
   const parsed = parse(body)
-  if (parsed === null) throw new Error(t('sync.badResponse', { url }))
+  if (parsed === null) {throw new Error(t('sync.badResponse', { url }))}
   return parsed
 }
 
@@ -141,9 +141,9 @@ export async function autoPushReview(
   fetchImpl: typeof fetch = fetch,
 ): Promise<AutoPushOutcome> {
   const creds = loadSyncCredentials()
-  if (!creds || loadGlobalConfig().syncAutoPush !== true) return { status: 'disabled' }
+  if (!creds || loadGlobalConfig().syncAutoPush !== true) {return { status: 'disabled' }}
   const secrets = detectDiffSecrets(record.diff)
-  if (secrets.length > 0) return { status: 'blocked_secrets', count: secrets.length }
+  if (secrets.length > 0) {return { status: 'blocked_secrets', count: secrets.length }}
   try {
     const remoteUrl = tryGit(['remote', 'get-url', 'origin'], cwd)
     const result = await pushReview({ record, remoteUrl, repoName: basename(cwd) }, creds, fetchImpl)
@@ -210,8 +210,8 @@ async function waitForLinkConfirmation(
   const deadline = Date.now() + LINK_POLL_BACKSTOP_MS
   for (;;) {
     const status = await getLinkRequestStatus(code, creds, fetchImpl)
-    if (status !== 'pending') return status
-    if (Date.now() > deadline) return 'expired'
+    if (status !== 'pending') {return status}
+    if (Date.now() > deadline) {return 'expired'}
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
   }
 }
@@ -234,7 +234,7 @@ export async function deleteWorkspaceData(
 // (the review record INCLUDING the diff) and asks for confirmation.
 async function ensureCredentials(): Promise<SyncCredentials | null> {
   const existing = loadSyncCredentials()
-  if (existing) return existing
+  if (existing) {return existing}
   if (!isInteractive()) {
     throw new Error(t('sync.nonInteractiveSetup'))
   }
@@ -249,14 +249,14 @@ async function ensureCredentials(): Promise<SyncCredentials | null> {
     ],
     initialIndex: 0,
   })
-  if (choice !== 'yes') return null
+  if (choice !== 'yes') {return null}
   return createWorkspace()
 }
 
 // Asked once, after the first successful manual push: a dismissed prompt
 // (null) leaves the choice open for the next sync instead of recording a "no".
 async function offerAutoPush(): Promise<void> {
-  if (!isInteractive() || loadGlobalConfig().syncAutoPush !== undefined) return
+  if (!isInteractive() || loadGlobalConfig().syncAutoPush !== undefined) {return}
   const choice = await select<'yes' | 'no'>({
     title: t('sync.autoPushQuestion'),
     options: [
@@ -265,14 +265,14 @@ async function offerAutoPush(): Promise<void> {
     ],
     initialIndex: 0,
   })
-  if (choice === null) return
+  if (choice === null) {return}
   saveGlobalConfig({ ...loadGlobalConfig(), syncAutoPush: choice === 'yes' })
 }
 
 // Deleting remote data is irreversible: every interactive path (menu or direct
 // `codesema sync delete`) confirms first; non-interactive runs stay scriptable.
 async function confirmSyncDelete(): Promise<boolean> {
-  if (!isInteractive()) return true
+  if (!isInteractive()) {return true}
   const choice = await select<'cancel' | 'delete'>({
     title: t('menu.syncDeleteConfirm'),
     options: [
@@ -288,8 +288,8 @@ async function confirmSyncDelete(): Promise<boolean> {
 export async function syncCommand(opts: { action?: string; cwd: string; force?: boolean }): Promise<void> {
   if (opts.action === 'delete') {
     const creds = loadSyncCredentials()
-    if (!creds) throw new Error(t('sync.noCredentials'))
-    if (!(await confirmSyncDelete())) return
+    if (!creds) {throw new Error(t('sync.noCredentials'))}
+    if (!(await confirmSyncDelete())) {return}
     await deleteWorkspaceData(creds)
     printOperationResult(t('sync.deleted'), [])
     return
@@ -308,7 +308,7 @@ export async function syncCommand(opts: { action?: string; cwd: string; force?: 
     console.log(`  ${t('sync.aborted')}`)
     return
   }
-  if (secrets.length > 0) console.log(`  ${dim(t('sync.secretsForced'))}`)
+  if (secrets.length > 0) {console.log(`  ${dim(t('sync.secretsForced'))}`)}
   const remoteUrl = tryGit(['remote', 'get-url', 'origin'], cwd)
   const result = await pushReview({ record, remoteUrl, repoName: basename(cwd) }, creds)
   const doneKey = result.deduplicated ? 'sync.alreadySynced' : 'sync.pushed'
@@ -332,7 +332,7 @@ export async function linkCommand(opts: {
   // Explicit pairing code (generated in the dashboard settings): direct link.
   if (opts.code) {
     const creds = loadSyncCredentials()
-    if (!creds) throw new Error(t('sync.noCredentials'))
+    if (!creds) {throw new Error(t('sync.noCredentials'))}
     const { tenant_id } = await linkWorkspace(opts.code, creds, fetchImpl)
     printOperationResult(t('sync.linked', { url: creds.url }), [{ label: t('field.account'), value: tenant_id }])
     return

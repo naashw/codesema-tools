@@ -91,7 +91,7 @@ describe('createFixRunner', () => {
     })
     const started = runner.start([0, 1])
     expect(started.ok).toBe(true)
-    while (runner.status().phase === 'running') await new Promise((r) => setTimeout(r, 5))
+    while (runner.status().phase === 'running') {await new Promise((r) => setTimeout(r, 5))}
     expect(runner.status()).toMatchObject({ phase: 'done', summary: 'two files patched', selected: [0, 1] })
     expect(seenPrompt).toContain('broken null check')
     expect(seenCommand).toBe('claude -p --permission-mode acceptEdits')
@@ -123,7 +123,7 @@ describe('createFixRunner', () => {
     expect(runner.start([0]).ok).toBe(true)
     expect(runner.start([0])).toMatchObject({ ok: false, code: 409 })
     release()
-    while (runner.status().phase === 'running') await new Promise((r) => setTimeout(r, 5))
+    while (runner.status().phase === 'running') {await new Promise((r) => setTimeout(r, 5))}
     expect(runner.start([1]).ok).toBe(true)
   })
 
@@ -134,7 +134,7 @@ describe('createFixRunner', () => {
       },
     })
     expect(runner.start([0]).ok).toBe(true)
-    while (runner.status().phase === 'running') await new Promise((r) => setTimeout(r, 5))
+    while (runner.status().phase === 'running') {await new Promise((r) => setTimeout(r, 5))}
     expect(runner.status()).toMatchObject({ phase: 'error', error: 'agent exploded' })
     expect(runner.start([0]).ok).toBe(true)
   })

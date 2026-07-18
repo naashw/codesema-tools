@@ -21,7 +21,7 @@ const STAMP_LABEL_KEY: Record<Stamp, string> = {
 }
 
 function stampFor(d: JudgeDecision): Stamp {
-  if (d.duplicate_of) return 'merged'
+  if (d.duplicate_of) {return 'merged'}
   return d.action === 'reject' ? 'rejected' : 'kept'
 }
 
@@ -34,7 +34,7 @@ const done = computed(() => props.judge?.decisions.length ?? 0)
 const pct = computed(() => (total.value > 0 ? Math.round((done.value / total.value) * 100) : 0))
 
 // Newest decision first: the judge appends to the cumulative list as it resolves each one.
-const reversedDecisions = computed(() => [...(props.judge?.decisions ?? [])].reverse())
+const reversedDecisions = computed(() => [...(props.judge?.decisions ?? [])].toReversed())
 </script>
 
 <template>

@@ -16,8 +16,8 @@ const props = defineProps<{
 const isDual = computed(() => props.status.mode === 'dual')
 
 const headerTitle = computed(() => {
-  if (props.status.phase === 'error') return t('live.errorTitle')
-  if (isDual.value && props.status.phase === 'judging') return t('live.judgeTitle')
+  if (props.status.phase === 'error') {return t('live.errorTitle')}
+  if (isDual.value && props.status.phase === 'judging') {return t('live.judgeTitle')}
   return t('live.title')
 })
 

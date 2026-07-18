@@ -122,7 +122,7 @@ async function runCloudMenu(cwd: string, actions: MenuActions): Promise<void> {
       })),
       summary: false,
     })
-    if (picked === null || picked === 'back') return
+    if (picked === null || picked === 'back') {return}
 
     if (picked === 'sync' && !context.inRepo) {
       printNotInRepo()
@@ -157,7 +157,7 @@ export async function runMenu(opts: { cwd: string }): Promise<void> {
       })),
       summary: false,
     })
-    if (picked === null || picked === 'quit') return
+    if (picked === null || picked === 'quit') {return}
 
     if ((picked === 'review' || picked === 'dualReview' || picked === 'show') && !context.inRepo) {
       printNotInRepo()

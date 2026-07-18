@@ -212,7 +212,7 @@ describe('runDualFlow', () => {
   const tempDirs: string[] = []
 
   afterAll(() => {
-    for (const dir of tempDirs) rmSync(dir, { recursive: true, force: true })
+    for (const dir of tempDirs) {rmSync(dir, { recursive: true, force: true })}
   })
 
   function setupDualRepo(agentPayload: string) {
@@ -271,7 +271,7 @@ describe('runDualFlow', () => {
     const outcome = await runDualFlow(flowOpts(fixture))
 
     expect(outcome.ok).toBe(true)
-    if (!outcome.ok) return
+    if (!outcome.ok) {return}
     expect(outcome.reportLines.filter((line) => line.includes('did not examine'))).toHaveLength(2)
   }, 20000)
 
@@ -283,7 +283,7 @@ describe('runDualFlow', () => {
     const outcome = await runDualFlow(flowOpts(fixture))
 
     expect(outcome.ok).toBe(true)
-    if (!outcome.ok) return
+    if (!outcome.ok) {return}
     expect(outcome.record.review.findings).toHaveLength(1)
     expect(outcome.record.review.findings[0]?.consensus).toBe(true)
     expect(outcome.record.meta.dual).toEqual({ merged: 1, rejected: 0, added_by_b: 0 })

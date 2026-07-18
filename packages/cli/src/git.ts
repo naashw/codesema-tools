@@ -12,7 +12,7 @@ export function git(args: string[], cwd: string): string {
     }).trimEnd()
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new Error(t('git.notFound'))
+      throw new Error(t('git.notFound'), { cause: err })
     }
     throw err
   }
@@ -61,7 +61,7 @@ export function isAncestor(a: string, b: string, cwd: string): boolean {
 
 export function revListCount(range: string, cwd: string): number | null {
   const out = tryGit(['rev-list', '--count', range], cwd)
-  if (out === null) return null
+  if (out === null) {return null}
   const n = Number(out)
   return Number.isFinite(n) ? n : null
 }

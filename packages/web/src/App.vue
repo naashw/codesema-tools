@@ -16,8 +16,8 @@ let events: EventSource | null = null
 
 async function loadRecord(): Promise<boolean> {
   const res = await fetch('/api/review')
-  if (res.status === 202) return false
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  if (res.status === 202) {return false}
+  if (!res.ok) {throw new Error(`HTTP ${res.status}`)}
   record.value = (await res.json()) as ReviewRecord
   return true
 }
@@ -55,7 +55,7 @@ function openEvents() {
 async function load() {
   error.value = null
   try {
-    if (await loadRecord()) return
+    if (await loadRecord()) {return}
     openEvents()
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)

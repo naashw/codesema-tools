@@ -672,7 +672,7 @@ export function t(key: MessageKey, params?: Record<string, unknown>, count?: num
     msg = (n === 1 ? parts[0] : parts[1] ?? parts[0]) ?? msg
   }
   if (params) {
-    for (const [k, v] of Object.entries(params)) msg = msg.replaceAll(`{${k}}`, String(v))
+    for (const [k, v] of Object.entries(params)) {msg = msg.replaceAll(`{${k}}`, String(v))}
   }
   return msg
 }

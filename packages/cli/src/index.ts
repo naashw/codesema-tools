@@ -14,7 +14,7 @@ import { VERSION } from './version.js'
 import { configCommand } from './wizard.js'
 
 function parseIntFlag(name: string, raw: string | undefined, min: number, max: number): number | undefined {
-  if (raw === undefined) return undefined
+  if (raw === undefined) {return undefined}
   const n = Number(raw)
   if (!Number.isInteger(n) || n < min || n > max) {
     throw new Error(t('cli.intFlagError', { name, raw, min, max }))
@@ -23,8 +23,8 @@ function parseIntFlag(name: string, raw: string | undefined, min: number, max: n
 }
 
 function parseFailOn(raw: string | undefined): ReviewGate | undefined {
-  if (raw === undefined) return undefined
-  if ((REVIEW_GATE_VALUES as readonly string[]).includes(raw)) return raw as ReviewGate
+  if (raw === undefined) {return undefined}
+  if ((REVIEW_GATE_VALUES as readonly string[]).includes(raw)) {return raw as ReviewGate}
   throw new Error(t('cli.failOnError', { raw, values: REVIEW_GATE_VALUES.join(', ') }))
 }
 

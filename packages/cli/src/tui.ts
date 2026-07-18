@@ -43,7 +43,7 @@ export async function select<T>(opts: {
   /** false = erase the prompt entirely on resolve, leaving no trace (stable in-place menus). */
   summary?: boolean
 }): Promise<T | null> {
-  if (!isInteractive() || opts.options.length === 0) return null
+  if (!isInteractive() || opts.options.length === 0) {return null}
 
   const { stdin, stdout } = process
   emitKeypressEvents(stdin)
@@ -59,19 +59,19 @@ export async function select<T>(opts: {
   const width = () => Math.max(40, stdout.columns || 80)
 
   const filtered = (): SelectOption<T>[] => {
-    if (!query) return opts.options
+    if (!query) {return opts.options}
     const q = query.toLowerCase()
     return opts.options.filter((o) => o.label.toLowerCase().includes(q))
   }
 
   const clearRendered = () => {
-    if (renderedLines > 0) stdout.write(`\x1b[${renderedLines}A`)
+    if (renderedLines > 0) {stdout.write(`\x1b[${renderedLines}A`)}
     stdout.write('\x1b[0J')
   }
 
   const render = () => {
     const list = filtered()
-    if (cursor >= list.length) cursor = Math.max(0, list.length - 1)
+    if (cursor >= list.length) {cursor = Math.max(0, list.length - 1)}
 
     const lines: string[] = []
     const filterPart = opts.filter
@@ -88,17 +88,17 @@ export async function select<T>(opts: {
     } else {
       const start = Math.min(Math.max(0, cursor - MAX_VISIBLE + 2), Math.max(0, list.length - MAX_VISIBLE))
       const visible = list.slice(start, start + MAX_VISIBLE)
-      if (start > 0) lines.push(`        ${faint(t('tui.moreUp', { n: start }))}`)
+      if (start > 0) {lines.push(`        ${faint(t('tui.moreUp', { n: start }))}`)}
       visible.forEach((option, i) => {
         const index = start + i
         const active = index === cursor
         const label = truncate(option.label, Math.floor(width() * 0.5))
         const hint = option.hint ? `  ${faint(truncate(option.hint, Math.floor(width() * 0.35)))}` : ''
-        if (option.separatorBefore && lines.at(-1) !== '') lines.push('')
+        if (option.separatorBefore && lines.at(-1) !== '') {lines.push('')}
         lines.push(active ? `      ${color('❯', ACCENT)} ${color(label, ACCENT)}${hint}` : `        ${label}${hint}`)
       })
       const rest = list.length - start - visible.length
-      if (rest > 0) lines.push(`        ${faint(t('tui.moreDown', { n: rest }))}`)
+      if (rest > 0) {lines.push(`        ${faint(t('tui.moreDown', { n: rest }))}`)}
     }
     lines.push(`  ${faint(opts.filter ? t('tui.keysWithFilter') : t('tui.keys'))}`)
 
@@ -114,7 +114,7 @@ export async function select<T>(opts: {
       stdin.pause()
       clearRendered()
       renderedLines = 0
-      if (opts.summary !== false) stdout.write(`${summary}\n`)
+      if (opts.summary !== false) {stdout.write(`${summary}\n`)}
       stdout.write('\x1b[?25h')
       resolve(value)
     }
@@ -122,7 +122,7 @@ export async function select<T>(opts: {
     const confirm = () => {
       const list = filtered()
       const chosen = list[cursor]
-      if (!chosen) return
+      if (!chosen) {return}
       finish(chosen.value, `  ${color('✔', ACCENT)} ${opts.title} ${faint('·')} ${chosen.label}`)
     }
 
@@ -137,8 +137,8 @@ export async function select<T>(opts: {
         stdout.write('\x1b[?25h\n')
         process.exit(130)
       }
-      if (key.name === 'return' || key.name === 'enter') return confirm()
-      if (key.name === 'escape') return cancel()
+      if (key.name === 'return' || key.name === 'enter') {return confirm()}
+      if (key.name === 'escape') {return cancel()}
       if (key.name === 'up' || (key.ctrl && key.name === 'p') || (!opts.filter && key.name === 'k')) {
         cursor = list.length ? (cursor - 1 + list.length) % list.length : 0
         return render()
@@ -147,7 +147,7 @@ export async function select<T>(opts: {
         cursor = list.length ? (cursor + 1) % list.length : 0
         return render()
       }
-      if (!opts.filter && key.name === 'q') return cancel()
+      if (!opts.filter && key.name === 'q') {return cancel()}
       if (!opts.filter && char && /^[1-9]$/.test(char)) {
         const index = Number(char) - 1
         if (index < list.length) {
@@ -175,7 +175,7 @@ export async function select<T>(opts: {
 }
 
 export async function textInput(opts: { title: string; placeholder?: string }): Promise<string | null> {
-  if (!isInteractive()) return null
+  if (!isInteractive()) {return null}
   const rl = createInterface({ input: process.stdin, output: process.stdout })
   try {
     const suffix = opts.placeholder ? ` ${faint(`(${opts.placeholder})`)}` : ''

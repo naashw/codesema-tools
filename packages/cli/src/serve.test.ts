@@ -136,7 +136,7 @@ function rawRequest(
       },
     )
     req.on('error', reject)
-    if (opts.body !== undefined) req.write(opts.body)
+    if (opts.body !== undefined) {req.write(opts.body)}
     req.end()
   })
 }
@@ -144,7 +144,7 @@ function rawRequest(
 async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void> {
   const startedAt = Date.now()
   while (!predicate()) {
-    if (Date.now() - startedAt > timeoutMs) throw new Error('timed out waiting for condition')
+    if (Date.now() - startedAt > timeoutMs) {throw new Error('timed out waiting for condition')}
     await new Promise((r) => setTimeout(r, 20))
   }
 }

@@ -26,7 +26,7 @@ export type CodesemaConfig = {
 type ConfigScope = 'global' | 'repo'
 
 function parseConfig(path: string, scope: ConfigScope): CodesemaConfig {
-  if (!existsSync(path)) return {}
+  if (!existsSync(path)) {return {}}
   try {
     const raw = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>
     const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined)
@@ -57,7 +57,7 @@ function writeConfig(path: string, config: CodesemaConfig, options?: { mode: num
 }
 
 export function globalConfigDir(): string {
-  if (process.env.CODESEMA_CONFIG_DIR) return process.env.CODESEMA_CONFIG_DIR
+  if (process.env.CODESEMA_CONFIG_DIR) {return process.env.CODESEMA_CONFIG_DIR}
   const base = process.env.XDG_CONFIG_HOME || join(homedir(), '.config')
   return join(base, 'codesema')
 }
@@ -109,12 +109,12 @@ export function trustStorePath(): string {
 
 function readTrustStore(): Record<string, string> {
   const path = trustStorePath()
-  if (!existsSync(path)) return {}
+  if (!existsSync(path)) {return {}}
   try {
     const raw = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>
     const out: Record<string, string> = {}
     for (const [key, value] of Object.entries(raw)) {
-      if (typeof value === 'string') out[key] = value
+      if (typeof value === 'string') {out[key] = value}
     }
     return out
   } catch {
@@ -140,6 +140,6 @@ export function ensureWorkDir(repoRoot: string): string {
   const dir = join(repoRoot, '.codesema')
   mkdirSync(dir, { recursive: true })
   const selfIgnore = join(dir, '.gitignore')
-  if (!existsSync(selfIgnore)) writeFileSync(selfIgnore, '*\n')
+  if (!existsSync(selfIgnore)) {writeFileSync(selfIgnore, '*\n')}
   return dir
 }

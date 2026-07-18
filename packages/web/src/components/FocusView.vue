@@ -12,7 +12,11 @@ const props = defineProps<{
   files: DiffFile[]
 }>()
 
-const selected = ref<Set<number>>(new Set(props.list.map((f) => f.id!)))
+function listIds(): number[] {
+  return props.list.flatMap((f) => (f.id == null ? [] : [f.id]))
+}
+
+const selected = ref<Set<number>>(new Set(listIds()))
 const cursor = ref(0)
 
 const current = computed(() => props.list[cursor.value] ?? null)
@@ -21,13 +25,13 @@ const selectedCount = computed(() => selected.value.size)
 
 function toggle(id: number) {
   const next = new Set(selected.value)
-  if (next.has(id)) next.delete(id)
-  else next.add(id)
+  if (next.has(id)) {next.delete(id)}
+  else {next.add(id)}
   selected.value = next
 }
 
 function selectAll() {
-  selected.value = new Set(props.list.map((f) => f.id!))
+  selected.value = new Set(listIds())
 }
 
 function selectNone() {
@@ -38,16 +42,16 @@ const canPrev = computed(() => cursor.value > 0)
 const canNext = computed(() => cursor.value < props.list.length - 1)
 
 function goPrev() {
-  if (canPrev.value) cursor.value--
+  if (canPrev.value) {cursor.value--}
 }
 function goNext() {
-  if (canNext.value) cursor.value++
+  if (canNext.value) {cursor.value++}
 }
 
 watch(
   () => props.list,
   (list) => {
-    if (cursor.value >= list.length) cursor.value = Math.max(0, list.length - 1)
+    if (cursor.value >= list.length) {cursor.value = Math.max(0, list.length - 1)}
   },
 )
 
@@ -58,7 +62,7 @@ async function copySelection() {
   try {
     await navigator.clipboard.writeText(buildFixPrompt(props.record, [...selected.value]))
     copied.value = true
-    if (copiedTimer) clearTimeout(copiedTimer)
+    if (copiedTimer) {clearTimeout(copiedTimer)}
     copiedTimer = setTimeout(() => {
       copied.value = false
     }, 2000)
@@ -80,30 +84,30 @@ const fixAvailable = computed(() => Boolean(fixToken) && fixDetail.value !== nul
 const fixRunning = computed(() => fixDetail.value?.phase === 'running')
 
 function stopPolling() {
-  if (!pollTimer) return
+  if (!pollTimer) {return}
   clearInterval(pollTimer)
   pollTimer = undefined
 }
 
 function startPolling() {
-  if (!pollTimer) pollTimer = setInterval(() => void refreshFixStatus(), 1500)
+  if (!pollTimer) {pollTimer = setInterval(() => void refreshFixStatus(), 1500)}
 }
 
 async function refreshFixStatus(): Promise<void> {
   try {
     const res = await fetch('/api/fix/status')
-    if (!res.ok) return
+    if (!res.ok) {return}
     const status = (await res.json()) as FixStatus
     fixStatus.value = status
-    if (status.available && status.phase === 'running') startPolling()
-    else stopPolling()
+    if (status.available && status.phase === 'running') {startPolling()}
+    else {stopPolling()}
   } catch {
     // local server stopped (Ctrl+C): keep the last known state
   }
 }
 
 async function runFixes() {
-  if (!fixToken || selectedCount.value === 0 || fixRunning.value) return
+  if (!fixToken || selectedCount.value === 0 || fixRunning.value) {return}
   fixRequestError.value = null
   try {
     const res = await fetch('/api/fix', {
@@ -148,9 +152,9 @@ const KIND_LABEL: Partial<Record<string, string>> = {
 
 function isTarget(rowLine: number | null, rowOld: number | null, rowKind: string): boolean {
   const f = current.value
-  if (!f || f.line == null) return false
+  if (!f || f.line == null) {return false}
   const end = f.endLine ?? f.line
-  if (rowLine != null) return rowLine >= f.line && rowLine <= end
+  if (rowLine != null) {return rowLine >= f.line && rowLine <= end}
   return rowKind === 'del' && rowOld === f.line
 }
 

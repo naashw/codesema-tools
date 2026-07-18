@@ -46,7 +46,8 @@ export function toSplit(rows: HunkLine[]): SplitRow[] {
   const out: SplitRow[] = []
   let i = 0
   while (i < rows.length) {
-    const r = rows[i]!
+    const r = rows[i]
+    if (!r) {break}
     if (r.t === 'ctx') {
       out.push({ kind: 'ctx', left: r, right: r })
       i++
@@ -56,18 +57,18 @@ export function toSplit(rows: HunkLine[]): SplitRow[] {
     const adds: HunkLine[] = []
     const notes: Finding[] = []
     while (i < rows.length) {
-      const rr = rows[i]!
-      if (rr.t === 'ctx') break
-      if (rr.t === 'del') dels.push(rr)
-      else adds.push(rr)
-      if (rr.note) notes.push(rr.note)
+      const rr = rows[i]
+      if (!rr || rr.t === 'ctx') {break}
+      if (rr.t === 'del') {dels.push(rr)}
+      else {adds.push(rr)}
+      if (rr.note) {notes.push(rr.note)}
       i++
     }
     const m = Math.max(dels.length, adds.length)
     for (let k = 0; k < m; k++) {
       out.push({ kind: 'chg', left: dels[k] ?? null, right: adds[k] ??  null })
     }
-    for (const nt of notes) out.push({ kind: 'note', note: nt })
+    for (const nt of notes) {out.push({ kind: 'note', note: nt })}
   }
   return out
 }
@@ -85,12 +86,12 @@ export type ParsedDiff = { files: DiffFile[]; unmatched: Finding[] }
 
 function stripPrefix(p: string): string {
   const t = p.trim()
-  if (t.startsWith('a/') || t.startsWith('b/')) return t.slice(2)
+  if (t.startsWith('a/') || t.startsWith('b/')) {return t.slice(2)}
   return t
 }
 
 export function sameFile(a: string, b: string): boolean {
-  if (a === b) return true
+  if (a === b) {return true}
   return a.endsWith('/' + b) || b.endsWith('/' + a)
 }
 
@@ -110,7 +111,7 @@ export function collapsedByBudget(
   let cumulative = 0
   for (const file of files) {
     const lines = file.addCount + file.delCount
-    if (lines > bigFileLines || cumulative > pageBudget) collapsed.add(file.path)
+    if (lines > bigFileLines || cumulative > pageBudget) {collapsed.add(file.path)}
     cumulative += lines
   }
   return collapsed
@@ -121,7 +122,7 @@ export function pickFiles(files: DiffFile[], only: string[]): DiffFile[] {
   const picked: DiffFile[] = []
   for (const p of only) {
     const f = files.find((df) => sameFile(df.path, p))
-    if (f && !picked.includes(f)) picked.push(f)
+    if (f && !picked.includes(f)) {picked.push(f)}
   }
   return picked
 }
@@ -162,7 +163,7 @@ export function parseDiff(diff: string, findings: Finding[] = []): ParsedDiff {
     ) {
       continue
     }
-    if (!current) continue
+    if (!current) {continue}
 
     const m = HUNK_RE.exec(raw)
     if (m) {
@@ -208,8 +209,8 @@ export function parseDiff(diff: string, findings: Finding[] = []): ParsedDiff {
   for (const file of files) {
     file.hunks = buildHunks(file.rows, file.byLine)
     for (const row of file.rows) {
-      if (row.kind === 'add') file.addCount++
-      else if (row.kind === 'del') file.delCount++
+      if (row.kind === 'add') {file.addCount++}
+      else if (row.kind === 'del') {file.delCount++}
     }
   }
 
@@ -261,7 +262,7 @@ export function buildHunks(rows: DiffRow[], byLine: Record<number, Finding[]> = 
       continue
     }
 
-    if (row.kind === 'meta') continue
+    if (row.kind === 'meta') {continue}
 
     const t: 'add' | 'del' | 'ctx' =
       row.kind === 'add' ? 'add' : row.kind === 'del' ? 'del' : 'ctx'
@@ -276,16 +277,16 @@ export function buildHunks(rows: DiffRow[], byLine: Record<number, Finding[]> = 
     // Attach the finding note to its line: add/ctx lines use a positive key (newNo),
     // del lines use a negative key (-oldNo).
     if (row.newNo != null && byLine[row.newNo]?.length) {
-      hunkLine.note = byLine[row.newNo]![0]
+      hunkLine.note = byLine[row.newNo]?.[0]
     } else if (row.kind === 'del' && row.oldNo != null && byLine[-row.oldNo]?.length) {
-      hunkLine.note = byLine[-row.oldNo]![0]
+      hunkLine.note = byLine[-row.oldNo]?.[0]
     }
 
     if (row.kind !== 'add') {
-      if (row.oldNo != null) prevHunkLastOldLine = row.oldNo
+      if (row.oldNo != null) {prevHunkLastOldLine = row.oldNo}
     }
     if (row.kind !== 'del') {
-      if (row.newNo != null) prevHunkLastNewLine = row.newNo
+      if (row.newNo != null) {prevHunkLastNewLine = row.newNo}
     }
 
     currentLines.push(hunkLine)
