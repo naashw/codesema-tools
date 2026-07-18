@@ -12,6 +12,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 ### Changed
 
 - The passive "update available" one-liner printed after `codesema review` and `codesema show` is replaced by the startup upgrade prompt.
+- The fix prompt now demands verification, mirroring the server-side fix agent: a regression test written red-first when a finding describes a reproducible bug, a run of the repo's cheap checks (typecheck, unit tests, lint) after the edits with a fallback note when the agent environment cannot run commands, and a summary that states how each fix was verified.
 
 ## [0.8.0] - 2026-07-16
 
