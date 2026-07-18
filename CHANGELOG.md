@@ -3,6 +3,12 @@
 All notable changes to `codesema` (the npm package in `packages/cli`) are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [SemVer](https://semver.org).
 
+## [0.9.0] - unreleased
+
+### Changed
+
+- The fix prompt now demands verification, mirroring the server-side fix agent: a regression test written red-first when a finding describes a reproducible bug, a run of the repo's cheap checks (typecheck, unit tests, lint) after the edits with a fallback note when the agent environment cannot run commands, and a summary that states how each fix was verified.
+
 ## [0.8.0] - 2026-07-16
 
 ### Added
