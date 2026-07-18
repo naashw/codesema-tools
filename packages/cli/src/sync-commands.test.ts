@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { loadGlobalConfig, saveGlobalConfig } from './config.js'
 import type { ReviewRecord } from './contract.js'
+import { subprocessEnv } from './git.js'
 import { t } from './i18n.js'
 import { linkCommand, syncCommand } from './sync.js'
 
@@ -177,15 +178,8 @@ function startStubServer(): Promise<StubServer> {
   })
 }
 
-// Strips GIT_DIR/GIT_WORK_TREE/etc.: git hooks (this repo's own lefthook pre-push)
-// set these on their own environment, and they'd redirect these fixture repos'
-// git calls to the outer repo instead of the freshly created one.
-function gitEnv(): NodeJS.ProcessEnv {
-  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')))
-}
-
 function runGit(args: string[], cwd: string): void {
-  execFileSync('git', args, { cwd, stdio: 'ignore', env: gitEnv() })
+  execFileSync('git', args, { cwd, stdio: 'ignore', env: subprocessEnv() })
 }
 
 async function withoutTTY(run: () => Promise<void>): Promise<void> {

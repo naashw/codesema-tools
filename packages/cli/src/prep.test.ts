@@ -3,22 +3,16 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { subprocessEnv } from './git.js'
 import { detectTarget, prep } from './prep.js'
 
 let repo: string
-
-// Strips GIT_DIR/GIT_WORK_TREE/etc.: git hooks (this repo's own lefthook pre-push)
-// set these on their own environment, and they'd redirect this fixture repo's
-// git calls to the outer repo instead of the freshly created one.
-function gitEnv(): NodeJS.ProcessEnv {
-  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')))
-}
 
 function run(args: string[]) {
   execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], {
     cwd: repo,
     stdio: 'ignore',
-    env: gitEnv(),
+    env: subprocessEnv(),
   })
 }
 

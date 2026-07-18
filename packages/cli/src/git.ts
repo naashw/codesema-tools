@@ -1,12 +1,27 @@
 import { execFileSync } from 'node:child_process'
 import { t } from './i18n.js'
 
-// GIT_DIR/GIT_WORK_TREE/etc. inherited from an enclosing process (a git hook
-// invoking this CLI, or an editor's git integration) would silently redirect
-// every call below away from `cwd` and onto whatever repo set them. `cwd` is
-// the only intended source of truth here, so those variables never propagate.
-function subprocessEnv(): NodeJS.ProcessEnv {
-  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')))
+// Set by git itself on the hooks it invokes (this CLI's own pre-commit/pre-push,
+// or any enclosing process's), these redirect every git call below away from
+// `cwd` and onto whatever repo set them. `cwd` is the only intended source of
+// truth here, so exactly these must never propagate. Deliberately NOT a blanket
+// GIT_*: user settings like GIT_SSH_COMMAND, GIT_AUTHOR_*/GIT_COMMITTER_* or
+// GIT_CONFIG_GLOBAL are legitimate and must reach the subprocess unchanged.
+const REPO_LOCATION_ENV_VARS = new Set([
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_COMMON_DIR',
+  'GIT_PREFIX',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_QUARANTINE_PATH',
+])
+
+export function subprocessEnv(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(source).filter(([key]) => !REPO_LOCATION_ENV_VARS.has(key)),
+  )
 }
 
 export function git(args: string[], cwd: string): string {
